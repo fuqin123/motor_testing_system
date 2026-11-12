@@ -1,0 +1,73 @@
+name: motor-monitor
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-motor_monitor}
+      POSTGRES_USER: ${POSTGRES_USER:-motor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - monitor
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      MP_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-motor}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-motor_monitor}
+      MP_AUTO_CREATE_TABLES: "false"
+      MP_RUN_COLLECTOR: "true"
+      MP_COLLECTOR_MODE: ${MP_COLLECTOR_MODE:-modbus}
+      MP_POLL_INTERVAL_MINUTES: ${MP_POLL_INTERVAL_MINUTES:-15}
+      MP_FEISHU_ENABLED: ${MP_FEISHU_ENABLED:-false}
+      MP_FEISHU_WEBHOOK_URL: ${MP_FEISHU_WEBHOOK_URL:-}
+      MP_FEISHU_WEBHOOK_SECRET: ${MP_FEISHU_WEBHOOK_SECRET:-}
+      MP_AUTH_MODE: ${MP_AUTH_MODE:-off}
+      TZ: ${TZ:-Asia/Shanghai}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config:ro
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - monitor
+
+  web:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    networks:
+      - monitor
+
+volumes:
+  pgdata:
+
+networks:
+  monitor:
+    driver: bridge
