@@ -4,6 +4,7 @@ const OverviewView = () => import('@/views/OverviewView.vue')
 const AnalysisView = () => import('@/views/AnalysisView.vue')
 const AlarmsView = () => import('@/views/AlarmsView.vue')
 const TopologyView = () => import('@/views/TopologyView.vue')
+const DeviceConfigView = () => import('@/views/DeviceConfigView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
 
 const router = createRouter({
@@ -33,6 +34,12 @@ const router = createRouter({
       name: 'topology',
       component: TopologyView,
       meta: { title: '设备与链路', crumb: '系统管理 / 设备与链路 · LoRa 全链路' },
+    },
+    {
+      path: '/device-config',
+      name: 'device-config',
+      component: DeviceConfigView,
+      meta: { title: '设备配置', crumb: '系统管理 / 设备配置 · 电机 / 网关 / 采集点' },
     },
     {
       path: '/settings',

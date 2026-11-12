@@ -118,6 +118,9 @@ onBeforeUnmount(() => {
               :label="data.summary.gateways_online > 0 ? '全链路正常' : '链路异常'"
             />
             <span class="badge pilot">只监测 · 只报警 · 不控制</span>
+            <button class="mini-btn primary" @click="router.push('/device-config')">
+              <Icon name="plus" :size="13" /> 配置设备
+            </button>
           </div>
           <div class="sub">数据流与方案架构一致 · 点击节点查看设备详情 · 数据不出厂</div>
         </div>

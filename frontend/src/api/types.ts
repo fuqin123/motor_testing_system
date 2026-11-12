@@ -52,6 +52,7 @@ export interface MotorSummary {
   temp_limit_c: number
   current_limit_a: number
   pilot: boolean
+  enabled: boolean
   node_code: string
   vfd_model: string
   install_date: string
@@ -110,6 +111,8 @@ export interface Alarm {
 
 export interface Overview {
   generated_at: string
+  date: string
+  is_today: boolean
   user: { name: string; role: string }
   sampling: SamplingInfo
   pilot: PilotInfo
@@ -160,6 +163,8 @@ export interface TrendSeries {
   bucket_minutes: number
   points: SeriesPoint[]
   motor_code: string | null
+  date?: string
+  is_today?: boolean
 }
 
 export interface Baseline {
@@ -389,4 +394,55 @@ export interface SystemInfo {
     total_auto: number
   }
   gateways: GatewayInfo[]
+}
+
+
+export interface MotorConfigPayload {
+  code: string
+  name: string
+  location: string
+  group_name: string
+  rated_kw: number
+  rated_current_a: number
+  pilot: boolean
+  enabled: boolean
+  node_code: string
+  vfd_model: string
+  install_date: string
+  last_maintenance: string
+  temp_limit_c: number
+  current_limit_a: number
+  temp_deviation_pct: number
+  current_deviation_pct: number
+  rise_rate_limit_c_per_day: number
+  notify_enabled: boolean
+}
+
+export interface GatewayConfigPayload {
+  code: string
+  name: string
+  host: string
+  port: number
+  framer: 'rtu' | 'tcp'
+  enabled: boolean
+  model: string
+  firmware: string
+  note: string
+}
+
+export interface SensorConfigPayload {
+  id?: number
+  code?: string
+  motor_code: string
+  gateway_code: string
+  kind: 'temperature' | 'current'
+  name: string
+  slave_id: number
+  register_address: number
+  register_count: number
+  scale: number
+  unit: string
+  enabled: boolean
+  power_type: string
+  firmware: string
 }

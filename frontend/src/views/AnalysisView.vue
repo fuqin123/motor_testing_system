@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { api } from '@/api/client'
 import type { QuadrantPoint, SelfAnalysis, TrendAnalysis, TrendSeries } from '@/api/types'
@@ -19,6 +19,7 @@ import { dateTime, fmt, pointLabel, signed } from '@/utils/format'
 const app = useAppStore()
 const ui = useUiStore()
 const route = useRoute()
+const router = useRouter()
 
 type Mode = 'self' | 'peer' | 'quad' | 'trend'
 const mode = ref<Mode>('self')
@@ -38,6 +39,9 @@ const alarmDrawerOpen = ref(false)
 const activeAlarmId = ref<number | null>(null)
 const reportOpen = ref(false)
 const reportText = ref('')
+const analysisDate = computed(() =>
+  typeof route.query.date === 'string' ? route.query.date : '',
+)
 let initialLoadDone = false
 
 const palette = [
@@ -165,7 +169,7 @@ async function loadSelf() {
   if (!motorCode.value) return
   loading.value = true
   try {
-    selfData.value = await api.selfAnalysis(motorCode.value, '30d')
+    selfData.value = await api.selfAnalysis(motorCode.value, '30d', analysisDate.value || undefined)
   } catch (error) {
     ui.notify('err', '自身对比加载失败', error instanceof Error ? error.message : '')
   } finally {
@@ -176,7 +180,7 @@ async function loadSelf() {
 async function loadPeer(group?: string) {
   loading.value = true
   try {
-    const data = await api.peers(group || undefined)
+    const data = await api.peers(group || undefined, analysisDate.value || undefined)
     peerData.value = data
     if (!peerGroup.value) peerGroup.value = data.group
   } catch (error) {
@@ -189,7 +193,7 @@ async function loadPeer(group?: string) {
 async function loadQuadrant() {
   loading.value = true
   try {
-    quadData.value = await api.quadrant()
+    quadData.value = await api.quadrant(analysisDate.value || undefined)
     if (!selectedQuad.value && quadData.value.points.length) {
       selectedQuad.value =
         quadData.value.points.find((point) => point.status !== 'ok')?.code ||
@@ -207,8 +211,8 @@ async function loadTrend() {
   loading.value = true
   try {
     const [analysis, series] = await Promise.all([
-      api.analysisTrend(motorCode.value, trendRange.value),
-      api.dashboardTrend(trendRange.value, motorCode.value),
+      api.analysisTrend(motorCode.value, trendRange.value, analysisDate.value || undefined),
+      api.dashboardTrend(trendRange.value, motorCode.value, analysisDate.value || undefined),
     ])
     trendData.value = analysis
     trendSeries.value = series
@@ -311,6 +315,10 @@ watch(trendRange, () => {
   if (mode.value === 'trend') void loadTrend()
 })
 watch(
+  () => route.query.date,
+  () => loadCurrentMode(),
+)
+watch(
   () => route.query.motor,
   (value) => {
     if (typeof value === 'string' && value && value !== motorCode.value) {
@@ -353,6 +361,14 @@ watch(
         </button>
       </div>
       <div class="right">
+        <span v-if="analysisDate" class="badge info">历史回看 · {{ analysisDate }}</span>
+        <button
+          v-if="analysisDate"
+          class="mini-btn"
+          @click="router.replace({ path: '/analysis', query: motorCode ? { motor: motorCode } : {} })"
+        >
+          回到实时
+        </button>
         <span style="font-size: 12px; color: var(--faint)">分析对象</span>
         <select
           class="input analysis-motor-select"
@@ -373,7 +389,7 @@ watch(
       <div v-if="selfData" class="ana-grid">
         <div class="card">
           <div class="card-head">
-            <h3>当前表现 vs 过去 30 天正常基线</h3>
+            <h3>{{ analysisDate ? '所选日期表现 vs 过去 30 天正常基线' : '当前表现 vs 过去 30 天正常基线' }}</h3>
             <div class="right"><span class="badge mut">基线 = 历史正常时段 P10–P90</span></div>
             <div class="sub">
               自己和自己比：同一台电机现在和过去正常状态比，看温度、电流是否偏高
@@ -467,7 +483,7 @@ watch(
           </div>
           <div class="analysis-stat-grid">
             <div class="analysis-stat">
-              <div class="l">当前外壳温度</div>
+              <div class="l">{{ analysisDate ? '所选日期温度' : '当前外壳温度' }}</div>
               <div class="v num">{{ fmt(selfData.latest.temperature_c) }} °C</div>
             </div>
             <div class="analysis-stat">
@@ -475,7 +491,7 @@ watch(
               <div class="v num">{{ fmt(selfData.baseline?.temp_median) }} °C</div>
             </div>
             <div class="analysis-stat">
-              <div class="l">当前运行电流</div>
+              <div class="l">{{ analysisDate ? '所选日期电流' : '当前运行电流' }}</div>
               <div class="v num">{{ fmt(selfData.latest.current_avg_a, 0) }} A</div>
             </div>
             <div class="analysis-stat">

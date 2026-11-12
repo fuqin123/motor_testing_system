@@ -61,27 +61,63 @@ function query(params: Record<string, string | number | undefined | null>): stri
 }
 
 export const api = {
-  overview: () => request<Overview>('/dashboard/overview'),
-  dashboardTrend: (range: string, motorCode?: string | null) =>
-    request<TrendSeries>(`/dashboard/trend${query({ range, motor_id: motorCode || undefined })}`),
-  motors: () => request<{ items: MotorCard[]; total: number }>('/motors'),
-  motor: (code: string) =>
+  overview: (date?: string) => request<Overview>(`/dashboard/overview${query({ date })}`),
+  dashboardTrend: (range: string, motorCode?: string | null, date?: string) =>
+    request<TrendSeries>(
+      `/dashboard/trend${query({ range, motor_id: motorCode || undefined, date })}`,
+    ),
+  motors: (includeDisabled = false) =>
+    request<{ items: MotorCard[]; total: number }>(
+      `/motors${query({ include_disabled: includeDisabled ? 'true' : undefined })}`,
+    ),
+  motor: (code: string, date?: string) =>
     request<{
       motor: MotorCard
       sensors: import('./types').SensorInfo[]
       baseline: import('./types').Baseline | null
       recent_alarms: Alarm[]
-    }>(`/motors/${encodeURIComponent(code)}`),
-  motorSeries: (code: string, range: string) =>
-    request<{ motor_code: string; range: string; bucket_minutes: number; points: SeriesPoint[] }>(
-      `/motors/${encodeURIComponent(code)}/series${query({ range })}`,
+    }>(`/motors/${encodeURIComponent(code)}${query({ date })}`),
+  motorSeries: (code: string, range: string, date?: string) =>
+    request<{
+      motor_code: string
+      range: string
+      bucket_minutes: number
+      points: SeriesPoint[]
+      date?: string
+      is_today?: boolean
+    }>(`/motors/${encodeURIComponent(code)}/series${query({ range, date })}`),
+  selfAnalysis: (motorCode: string, range = '30d', date?: string) =>
+    request<SelfAnalysis>(`/analysis/self${query({ motor_id: motorCode, range, date })}`),
+  peers: (group?: string, date?: string) =>
+    request<PeerAnalysis>(`/analysis/peers${query({ group, date })}`),
+  quadrant: (date?: string) =>
+    request<QuadrantAnalysis>(`/analysis/quadrant${query({ date })}`),
+  analysisTrend: (motorCode: string, range = '7d', date?: string) =>
+    request<TrendAnalysis>(`/analysis/trend${query({ motor_id: motorCode, range, date })}`),
+  upsertMotor: (payload: import('./types').MotorConfigPayload) =>
+    request<{ code: string; name: string; enabled: boolean; created: boolean }>('/motors', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  upsertGateway: (payload: import('./types').GatewayConfigPayload) =>
+    request<{ created: boolean; gateway: import('./types').GatewayInfo }>('/devices/gateways', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteGateway: (code: string) =>
+    request<{ deleted: boolean; code: string }>(
+      `/devices/gateways/${encodeURIComponent(code)}`,
+      { method: 'DELETE' },
     ),
-  selfAnalysis: (motorCode: string, range = '30d') =>
-    request<SelfAnalysis>(`/analysis/self${query({ motor_id: motorCode, range })}`),
-  peers: (group?: string) => request<PeerAnalysis>(`/analysis/peers${query({ group })}`),
-  quadrant: () => request<QuadrantAnalysis>('/analysis/quadrant'),
-  analysisTrend: (motorCode: string, range = '7d') =>
-    request<TrendAnalysis>(`/analysis/trend${query({ motor_id: motorCode, range })}`),
+  upsertSensor: (payload: import('./types').SensorConfigPayload) =>
+    request<{ created: boolean; sensor: import('./types').SensorInfo }>('/devices/sensors', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteSensor: (id: number) =>
+    request<{ deleted: boolean; id: number }>(`/devices/sensors/${id}`, {
+      method: 'DELETE',
+    }),
   alarms: (params: {
     level?: string
     status?: string

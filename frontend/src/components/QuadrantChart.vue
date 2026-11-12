@@ -59,7 +59,7 @@ function buildOption(): echarts.EChartsOption {
 
   return {
     backgroundColor: 'transparent',
-    animationDuration: 450,
+    animationDuration: 280,
     grid: props.mini
       ? { left: 42, right: 16, top: 20, bottom: 28 }
       : { left: 54, right: 22, top: 28, bottom: 42 },
@@ -202,6 +202,7 @@ onMounted(() => {
   chart = echarts.init(el.value, undefined, {
     width: el.value.clientWidth || 600,
     height: el.value.clientHeight || props.height,
+    useDirtyRect: true,
   })
   chart.on('click', (params) => {
     const code = (params.data as { code?: string } | undefined)?.code

@@ -31,7 +31,7 @@
   --r-lg: 18px;
   --r-md: 13px;
   --r-sm: 9px;
-  --shadow: 0 14px 34px rgba(2, 6, 18, 0.5);
+  --shadow: 0 8px 22px rgba(2, 6, 18, 0.38);
   --font:
     'Inter', -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
     'Noto Sans SC', sans-serif;
@@ -118,11 +118,7 @@ a {
 }
 .aurora::before,
 .aurora::after {
-  content: '';
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.5;
+  display: none;
 }
 .aurora::before {
   width: 520px;
@@ -140,22 +136,8 @@ a {
   background: radial-gradient(circle, rgba(157, 124, 255, 0.13), transparent 65%);
   animation: drift 32s ease-in-out infinite alternate-reverse;
 }
-@keyframes drift {
-  from {
-    transform: translate(0, 0) scale(1);
-  }
-  to {
-    transform: translate(70px, 46px) scale(1.12);
-  }
-}
 .grain {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: 0.05;
-  mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+  display: none;
 }
 
 /* ---------- 布局骨架 ---------- */
@@ -201,8 +183,7 @@ a {
   z-index: 60;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, rgba(17, 27, 48, 0.72), rgba(10, 15, 28, 0.86));
-  backdrop-filter: blur(14px);
+  background: linear-gradient(180deg, #0b1322, #080e1a);
   border-right: 1px solid var(--line-soft);
   transition:
     width 0.3s var(--ease),
@@ -394,8 +375,7 @@ a {
   align-items: center;
   gap: 16px;
   padding: 0 30px;
-  background: rgba(6, 10, 19, 0.72);
-  backdrop-filter: blur(16px);
+  background: #070c16;
   border-bottom: 1px solid var(--line-soft);
 }
 .hamburger {
@@ -777,9 +757,8 @@ a {
   width: 75%;
   height: 120%;
   border-radius: 50%;
-  filter: blur(42px);
-  opacity: 0.14;
-  background: var(--accent, #2dd4ee);
+  opacity: 0.16;
+  background: radial-gradient(circle at center, var(--accent, #2dd4ee), transparent 68%);
   pointer-events: none;
 }
 .kpi-top {
@@ -890,7 +869,6 @@ a {
   padding: 10px 13px;
   font-size: 12px;
   box-shadow: var(--shadow);
-  backdrop-filter: blur(8px);
   opacity: 0;
   transition: opacity 0.12s;
   max-width: 270px;
@@ -1599,7 +1577,6 @@ td .sub {
   background: rgba(17, 27, 48, 0.95);
   border: 1px solid rgba(45, 212, 238, 0.4);
   box-shadow: 0 12px 30px rgba(2, 6, 18, 0.6);
-  backdrop-filter: blur(10px);
   font-size: 13px;
   animation: viewIn 0.25s var(--ease);
 }
@@ -1819,7 +1796,6 @@ textarea.input {
   background: rgba(17, 27, 48, 0.95);
   border: 1px solid var(--line);
   box-shadow: 0 14px 34px rgba(2, 6, 18, 0.65);
-  backdrop-filter: blur(12px);
   margin-top: 4px;
 }
 .save-bar p {
@@ -1851,8 +1827,7 @@ textarea.input {
   position: fixed;
   inset: 0;
   z-index: 90;
-  background: rgba(3, 6, 12, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(3, 6, 12, 0.74);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s;
@@ -2115,7 +2090,6 @@ textarea.input {
   padding: 13px 16px;
   font-size: 13px;
   box-shadow: 0 16px 40px rgba(2, 6, 18, 0.6);
-  backdrop-filter: blur(10px);
   animation: toastIn 0.35s var(--ease);
 }
 .toast.out {

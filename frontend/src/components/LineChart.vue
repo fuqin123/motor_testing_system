@@ -214,7 +214,7 @@ function buildOption(): echarts.EChartsOption {
 
   return {
     backgroundColor: 'transparent',
-    animationDuration: 450,
+    animationDuration: 280,
     textStyle: {
       fontFamily: "Inter, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
     },
@@ -272,6 +272,7 @@ onMounted(() => {
   chart = echarts.init(el.value, undefined, {
     width: el.value.clientWidth || 600,
     height: el.value.clientHeight || props.height,
+    useDirtyRect: true,
   })
   observer = new ResizeObserver(() => chart?.resize())
   observer.observe(el.value)
