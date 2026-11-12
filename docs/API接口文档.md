@@ -1,6 +1,6 @@
 # API 接口文档
 
-> 版本：v1.0 · 2026-11-12
+> 版本：v0.2.0 · 2026-11-12
 > Base URL：`http://<host>:8000/api/v1`
 > 在线文档：`/api/docs`（Swagger UI）· `/api/redoc` · `/api/openapi.json`
 
@@ -20,6 +20,7 @@
 
 - `Content-Type: application/json; charset=utf-8`
 - 时间：ISO 8601 UTC，例如 `"2026-11-12T06:30:00Z"`；前端本地化为北京时间。
+- **日期回看**：总览、趋势、分析、电机详情/序列支持 `date=YYYY-MM-DD`（Asia/Shanghai）；省略表示今天/实时，历史日期以所选日结束时刻为 `as_of`，只使用该时刻之前的数据。
 - 数值单位：温度 `°C`，电流 `A`，偏离 `%`，温升 `°C/天`。
 - 错误格式：
 
@@ -150,9 +151,11 @@
 
 ### 3.1 总览
 
-`GET /dashboard/overview`
+`GET /dashboard/overview?date=2026-11-12`
 
-返回 KPI、电机卡片、活跃告警、链路统计、闭环统计、采样信息、试点信息。
+- `date` 省略：实时；传入历史日期：返回该日结束时的快照。
+- 返回 KPI、电机卡片、当日告警、链路统计、闭环统计、采样信息、试点信息。
+- 响应顶层包含 `date`（YYYY-MM-DD）和 `is_today`；历史模式下 `active_alarms` 为当日触发的告警，`link`/`loop` 为当日统计。
 
 ```json
 {
@@ -249,7 +252,7 @@
 
 ### 3.2 趋势
 
-`GET /dashboard/trend?range=24h|7d|30d&motor_id=M-03`
+`GET /dashboard/trend?range=24h|7d|30d&motor_id=M-03&date=2026-11-12`
 
 `motor_id` 省略时返回全部启用电机均值。
 
@@ -275,7 +278,7 @@
 
 ### 4.1 电机列表
 
-`GET /motors`
+`GET /motors?include_disabled=true`
 
 ```json
 {
@@ -299,7 +302,7 @@
 
 ### 4.2 电机详情
 
-`GET /motors/{code}`
+`GET /motors/{code}?date=2026-11-12`
 
 ```json
 {
@@ -329,7 +332,7 @@
 
 ### 4.3 历史序列
 
-`GET /motors/{code}/series?range=24h|7d|30d`
+`GET /motors/{code}/series?range=24h|7d|30d&date=2026-11-12`
 
 返回 `{motor_code, range, bucket_minutes, points[]}`，`points` 结构同 3.2。
 
@@ -368,11 +371,46 @@
 
 写入 `audit_logs`。
 
+### 4.5 新增/更新电机
+
+`POST /motors`
+
+按 `code` upsert；用于前端“设备配置”新增或编辑电机。写入审计。
+
+```json
+{
+  "code": "M-07",
+  "name": "3#循环水泵电机",
+  "location": "一车间 · 循环水泵房",
+  "group_name": "泵组A",
+  "rated_kw": 132,
+  "rated_current_a": 240,
+  "pilot": true,
+  "enabled": true,
+  "node_code": "N-01",
+  "vfd_model": "ABB ACS580",
+  "install_date": "2024-01",
+  "last_maintenance": "2026-11-01 润滑保养",
+  "temp_limit_c": 85,
+  "current_limit_a": 252,
+  "temp_deviation_pct": 8,
+  "current_deviation_pct": 10,
+  "rise_rate_limit_c_per_day": 1.0,
+  "notify_enabled": true
+}
+```
+
+响应：
+
+```json
+{ "code": "M-07", "name": "3#循环水泵电机", "enabled": true, "created": true }
+```
+
 ## 5. 对比分析
 
 ### 5.1 自身历史
 
-`GET /analysis/self?motor_id=M-03&range=30d`
+`GET /analysis/self?motor_id=M-03&range=30d&date=2026-11-12`
 
 返回：
 
@@ -402,7 +440,7 @@
 
 ### 5.2 同类对比
 
-`GET /analysis/peers?group=泵组A`
+`GET /analysis/peers?group=泵组A&date=2026-11-12`
 
 ```json
 {
@@ -428,7 +466,7 @@
 
 ### 5.3 四象限
 
-`GET /analysis/quadrant`
+`GET /analysis/quadrant?date=2026-11-12`
 
 ```json
 {
@@ -442,7 +480,7 @@
 
 ### 5.4 趋势
 
-`GET /analysis/trend?motor_id=M-03&range=7d`
+`GET /analysis/trend?motor_id=M-03&range=7d&date=2026-11-12`
 
 ```json
 {
@@ -650,6 +688,72 @@
 { "accepted": true, "message": "已加入召测队列，下一轮采集立即执行" }
 ```
 
+### 7.3 新增/更新网关
+
+`POST /devices/gateways`
+
+```json
+{
+  "code": "GW-02",
+  "name": "二车间 LoRa 网关",
+  "host": "10.112.66.232",
+  "port": 10123,
+  "framer": "rtu",
+  "enabled": true,
+  "model": "LoRa 网关",
+  "firmware": "v1.4.2",
+  "note": "厂区网口上联"
+}
+```
+
+```json
+{ "created": true, "gateway": { "code": "GW-02", "online": false } }
+```
+
+### 7.4 删除网关
+
+`DELETE /devices/gateways/{code}`
+
+- 网关仍绑定采集点时返回 409；
+- 删除成功返回 `{ "deleted": true, "code": "GW-02" }`。
+
+### 7.5 新增/更新采集点
+
+`POST /devices/sensors`
+
+按 `id` 更新；不传 `id` 时按 `code` 或 `(motor_code, kind)` upsert；`code` 留空自动生成 `T-xx`/`C-xx`。
+
+```json
+{
+  "motor_code": "M-07",
+  "gateway_code": "GW-02",
+  "kind": "temperature",
+  "name": "外壳温度",
+  "slave_id": 7,
+  "register_address": 0,
+  "register_count": 1,
+  "scale": 0.1,
+  "unit": "℃",
+  "enabled": true,
+  "power_type": "市电供电",
+  "firmware": "—"
+}
+```
+
+```json
+{ "created": true, "sensor": { "code": "T-07", "motor_code": "M-07", "gateway_code": "GW-02" } }
+```
+
+### 7.6 删除采集点
+
+`DELETE /devices/sensors/{sensor_id}`
+
+```json
+{ "deleted": true, "id": 13 }
+```
+
+> 设备配置保存后，下一轮 15 分钟采集自动读取数据库新配置；也可调用 `POST /devices/gateways/{code}/poll` 立即召测。
+
 ## 8. 设置
 
 ### 8.1 获取设置
@@ -771,6 +875,12 @@ curl -X POST http://127.0.0.1:8000/api/v1/alarms/7/close \
 curl -X PATCH http://127.0.0.1:8000/api/v1/motors/M-01/thresholds \
      -H "Content-Type: application/json" \
      -d '{"temp_limit_c":85,"current_limit_a":252}'
+
+# 历史总览
+curl "http://127.0.0.1:8000/api/v1/dashboard/overview?date=2026-11-05"
+
+# 新增网关
+curl -X POST http://127.0.0.1:8000/api/v1/devices/gateways      -H "Content-Type: application/json"      -d '{"code":"GW-02","name":"二车间网关","host":"10.112.66.232","port":10123,"framer":"rtu"}'
 
 # 立即召测
 curl -X POST http://127.0.0.1:8000/api/v1/system/collector/poll
