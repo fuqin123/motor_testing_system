@@ -15,12 +15,13 @@ RUN pip install --index-url "${PIP_INDEX_URL}" -r requirements.txt
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
+COPY healthcheck.py ./
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["python", "healthcheck.py"]
 
 ENTRYPOINT ["docker-entrypoint.sh"]

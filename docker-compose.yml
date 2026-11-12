@@ -32,6 +32,7 @@ services:
       MP_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-motor}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-motor_monitor}
       MP_AUTO_CREATE_TABLES: "false"
       MP_RUN_COLLECTOR: "true"
+      MP_API_PORT: "8000"
       MP_COLLECTOR_MODE: ${MP_COLLECTOR_MODE:-modbus}
       MP_POLL_INTERVAL_MINUTES: ${MP_POLL_INTERVAL_MINUTES:-15}
       MP_FEISHU_ENABLED: ${MP_FEISHU_ENABLED:-false}

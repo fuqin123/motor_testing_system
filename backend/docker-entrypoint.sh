@@ -6,5 +6,5 @@ if [ "${MP_SKIP_MIGRATIONS:-false}" != "true" ]; then
   alembic upgrade head
 fi
 
-echo "[entrypoint] Starting API server..."
-exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 1
+echo "[entrypoint] Starting API server on port ${MP_API_PORT:-8000}..."
+exec uvicorn app.main:app --host 0.0.0.0 --port "${MP_API_PORT:-8000}" --workers 1
