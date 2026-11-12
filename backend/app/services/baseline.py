@@ -56,7 +56,7 @@ def deviation_pct(value: float | None, baseline: float | None) -> float | None:
     return (value - baseline) / baseline * 100.0
 
 
-_cache: dict[int, tuple[datetime, Baseline]] = {}
+_cache: dict[tuple[int, int], tuple[datetime, Baseline]] = {}
 _cache_lock = threading.Lock()
 
 
@@ -74,9 +74,10 @@ def compute_baseline(
 ) -> Baseline | None:
     now = as_utc(now or utcnow())
     assert now is not None
+    cache_key = (motor.id, int(now.timestamp() // 3600))
     if use_cache:
         with _cache_lock:
-            cached = _cache.get(motor.id)
+            cached = _cache.get(cache_key)
             if cached and (now - cached[0]).total_seconds() < settings.baseline_cache_minutes * 60:
                 return cached[1]
 
@@ -85,6 +86,7 @@ def compute_baseline(
         select(Reading.ts, Reading.temperature_c, Reading.current_avg_a).where(
             Reading.motor_id == motor.id,
             Reading.ts >= since,
+            Reading.ts <= now,
             Reading.quality != "error",
         )
     ).all()
@@ -126,7 +128,7 @@ def compute_baseline(
     )
     if use_cache:
         with _cache_lock:
-            _cache[motor.id] = (now, baseline)
+            _cache[cache_key] = (now, baseline)
     return baseline
 
 

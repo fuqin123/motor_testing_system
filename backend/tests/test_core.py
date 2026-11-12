@@ -214,3 +214,112 @@ def test_manual_close_suppresses_regeneration(db):
     again = apply_reading_alarms(db, motor, reading, candidates, config, now=reading.ts)
     assert again == []
     assert db.query(Alarm).filter(Alarm.motor_code == "T-SUP").count() == 1
+
+
+def test_historical_overview_and_motor_series(client, db):
+    from app.core.time import local_now
+    from app.db.models import Reading
+    from app.services.date_view import resolve_date_view
+
+    target_date = (local_now().date() - timedelta(days=1)).isoformat()
+    view = resolve_date_view(target_date)
+    motor = Motor(
+        code="M-DATE",
+        name="历史测试电机",
+        rated_current_a=100,
+        temp_limit_c=85,
+        current_limit_a=105,
+        group_name="历史组",
+    )
+    db.add(motor)
+    db.flush()
+    db.add(
+        Reading(
+            motor_id=motor.id,
+            ts=view.day_start + timedelta(hours=12),
+            temperature_c=61.5,
+            current_avg_a=80.0,
+            quality="ok",
+        )
+    )
+    db.commit()
+
+    response = client.get(f"/api/v1/dashboard/overview?date={target_date}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["is_today"] is False
+    assert body["date"] == target_date
+    historical_motor = next(item for item in body["motors"] if item["code"] == "M-DATE")
+    assert historical_motor["temperature_c"] == 61.5
+
+    response = client.get(f"/api/v1/motors/M-DATE?date={target_date}")
+    assert response.status_code == 200
+    assert response.json()["motor"]["temperature_c"] == 61.5
+
+    response = client.get(f"/api/v1/motors/M-DATE/series?range=24h&date={target_date}")
+    assert response.status_code == 200
+    assert response.json()["is_today"] is False
+    assert len(response.json()["points"]) >= 1
+
+
+def test_device_config_api(client, db):
+    response = client.post(
+        "/api/v1/devices/gateways",
+        json={
+            "code": "GW-CFG",
+            "name": "配置测试网关",
+            "host": "127.0.0.1",
+            "port": 15020,
+            "framer": "tcp",
+            "enabled": True,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["created"] is True
+
+    response = client.post(
+        "/api/v1/motors",
+        json={
+            "code": "M-CFG",
+            "name": "配置测试电机",
+            "group_name": "配置组",
+            "rated_current_a": 120,
+            "temp_limit_c": 80,
+            "current_limit_a": 126,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["created"] is True
+
+    response = client.post(
+        "/api/v1/devices/sensors",
+        json={
+            "motor_code": "M-CFG",
+            "gateway_code": "GW-CFG",
+            "kind": "temperature",
+            "slave_id": 21,
+            "register_address": 0,
+            "register_count": 1,
+            "scale": 0.1,
+            "unit": "℃",
+        },
+    )
+    assert response.status_code == 200
+    sensor_id = response.json()["sensor"]["id"]
+    assert response.json()["sensor"]["code"].startswith("T-")
+    assert response.json()["sensor"]["motor_code"] == "M-CFG"
+
+    response = client.get("/api/v1/devices")
+    assert response.status_code == 200
+    assert any(
+        item["motor_code"] == "M-CFG" and item["gateway_code"] == "GW-CFG"
+        for item in response.json()["sensors"]
+    )
+
+    response = client.delete(f"/api/v1/devices/sensors/{sensor_id}")
+    assert response.status_code == 200
+    assert response.json()["deleted"] is True
+
+    response = client.delete("/api/v1/devices/gateways/GW-CFG")
+    assert response.status_code == 200
+    assert response.json()["deleted"] is True

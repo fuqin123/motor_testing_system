@@ -435,7 +435,7 @@ def seed_demo(reset: bool = False) -> bool:
             owner="李工 · 电气",
         )
 
-        cycle_start = floor_bucket(now - timedelta(days=2), settings.poll_interval_minutes)
+        cycle_start = floor_bucket(now - timedelta(days=30), settings.poll_interval_minutes)
         cycle = cycle_start
         cycle_rows = []
         while cycle <= end:

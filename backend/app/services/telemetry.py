@@ -12,7 +12,9 @@ from app.db.models import Alarm, Gateway, Motor, PollCycle, Reading, Sensor
 ONLINE_TOLERANCE_CYCLES = 2
 
 
-def latest_readings(db: Session, motor_ids: list[int] | None = None) -> dict[int, Reading]:
+def latest_readings(
+    db: Session, motor_ids: list[int] | None = None, until: datetime | None = None
+) -> dict[int, Reading]:
     rn = (
         func.row_number()
         .over(partition_by=Reading.motor_id, order_by=Reading.ts.desc())
@@ -21,6 +23,8 @@ def latest_readings(db: Session, motor_ids: list[int] | None = None) -> dict[int
     inner = select(Reading.id, rn)
     if motor_ids is not None:
         inner = inner.where(Reading.motor_id.in_(motor_ids))
+    if until is not None:
+        inner = inner.where(Reading.ts <= until)
     subquery = inner.subquery()
     latest_ids = select(subquery.c.id).where(subquery.c.rn == 1)
     rows = db.scalars(select(Reading).where(Reading.id.in_(latest_ids))).all()
@@ -28,7 +32,10 @@ def latest_readings(db: Session, motor_ids: list[int] | None = None) -> dict[int
 
 
 def recent_readings_map(
-    db: Session, motor_ids: list[int] | None = None, limit: int = 26
+    db: Session,
+    motor_ids: list[int] | None = None,
+    limit: int = 26,
+    until: datetime | None = None,
 ) -> dict[int, list[Reading]]:
     rn = (
         func.row_number()
@@ -38,6 +45,8 @@ def recent_readings_map(
     inner = select(Reading.id, Reading.motor_id, rn)
     if motor_ids is not None:
         inner = inner.where(Reading.motor_id.in_(motor_ids))
+    if until is not None:
+        inner = inner.where(Reading.ts <= until)
     subquery = inner.subquery()
     recent_ids = select(subquery.c.id).where(subquery.c.rn <= limit)
     rows = db.scalars(select(Reading).where(Reading.id.in_(recent_ids))).all()
@@ -76,6 +85,24 @@ def load_pct(motor: Motor, reading: Reading | None) -> float | None:
     if reading is None or reading.current_avg_a is None or motor.rated_current_a <= 0:
         return None
     return reading.current_avg_a / motor.rated_current_a * 100.0
+
+
+def alarms_in_range(db: Session, start: datetime, end: datetime) -> list[Alarm]:
+    return list(
+        db.scalars(
+            select(Alarm)
+            .where(Alarm.triggered_at >= start, Alarm.triggered_at < end)
+            .order_by(Alarm.triggered_at.desc())
+        ).all()
+    )
+
+
+def alarms_by_motor_from_list(alarms: list[Alarm]) -> dict[str, list[Alarm]]:
+    grouped: dict[str, list[Alarm]] = {}
+    for alarm in alarms:
+        if alarm.motor_code:
+            grouped.setdefault(alarm.motor_code, []).append(alarm)
+    return grouped
 
 
 def active_alarms(db: Session) -> list[Alarm]:

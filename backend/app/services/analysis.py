@@ -114,6 +114,7 @@ def motor_summary(motor: Motor) -> dict:
         "temp_limit_c": motor.temp_limit_c,
         "current_limit_a": motor.current_limit_a,
         "pilot": motor.pilot,
+        "enabled": motor.enabled,
         "node_code": motor.node_code,
         "vfd_model": motor.vfd_model,
         "install_date": motor.install_date,
@@ -321,7 +322,7 @@ def build_peer_analysis(db: Session, group: str | None = None, now: datetime | N
     groups = sorted({motor.group_name for motor in motors})
     selected_group = group if group in groups else (groups[0] if groups else "")
     selected = [motor for motor in motors if motor.group_name == selected_group]
-    latest_map = latest_readings(db, [motor.id for motor in selected])
+    latest_map = latest_readings(db, [motor.id for motor in selected], until=now)
     items = []
     for motor in selected:
         baseline = compute_baseline(db, motor, now=now)
@@ -352,7 +353,7 @@ def build_quadrant(db: Session, now: datetime | None = None) -> dict:
     motors = list(
         db.scalars(select(Motor).where(Motor.enabled.is_(True)).order_by(Motor.code)).all()
     )
-    latest_map = latest_readings(db, [motor.id for motor in motors])
+    latest_map = latest_readings(db, [motor.id for motor in motors], until=now)
     points = []
     for motor in motors:
         latest = latest_map.get(motor.id)
@@ -434,6 +435,7 @@ def build_trend(
         .where(
             Alarm.motor_code == motor.code,
             Alarm.triggered_at >= now - timedelta(days=RANGE_CONFIG[range_key]["days"]),
+            Alarm.triggered_at <= now,
         )
         .order_by(Alarm.triggered_at.asc())
     ).all()
@@ -460,7 +462,7 @@ def build_trend(
 def build_motor_status_map(
     db: Session, motors: list[Motor], now: datetime | None = None
 ) -> dict[int, str]:
-    latest_map = latest_readings(db, [motor.id for motor in motors])
+    latest_map = latest_readings(db, [motor.id for motor in motors], until=now)
     from app.services.telemetry import active_alarms_by_motor
 
     alarm_map = active_alarms_by_motor(db)
