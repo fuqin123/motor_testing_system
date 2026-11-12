@@ -1,0 +1,96 @@
+# 现场点表：复制为 points.yaml 后按实际接线修改，再执行
+#   python -m app.cli import-points config/points.yaml
+#
+# 温度变送器：保持寄存器 0，1 个字，int16，倍率 0.1，单位 ℃
+# 电流变送器：保持寄存器 0~2，3 个字，int16，倍率 0.01，单位 A（A/B/C 三相）
+gateways:
+  - code: GW-01
+    name: 一车间 LoRa 网关
+    host: 10.112.66.231
+    port: 10123
+    framer: rtu            # rtu = RTU over TCP；tcp = Modbus TCP
+    enabled: true
+    model: LoRa 网关
+    note: 厂区网口上联
+
+motors:
+  - code: M-01
+    name: 1#循环水泵电机
+    location: 一车间 · 循环水泵房
+    group: 泵组A
+    rated_kw: 132
+    rated_current_a: 240
+    pilot: true
+    node_code: N-01
+    vfd_model: ABB ACS580
+    temp_limit_c: 85
+    current_limit_a: 252
+    sensors:
+      - kind: temperature
+        gateway: GW-01
+        slave_id: 1
+        register_address: 0
+        register_count: 1
+        scale: 0.1
+        enabled: true
+      - kind: current
+        gateway: GW-01
+        slave_id: 3
+        register_address: 0
+        register_count: 3
+        scale: 0.01
+        enabled: true
+
+  - code: M-02
+    name: 2#循环水泵电机
+    location: 一车间 · 循环水泵房
+    group: 泵组A
+    rated_kw: 132
+    rated_current_a: 240
+    pilot: true
+    node_code: N-01
+    vfd_model: ABB ACS580
+    temp_limit_c: 85
+    current_limit_a: 252
+    sensors:
+      - kind: temperature
+        gateway: GW-01
+        slave_id: 2
+        register_address: 0
+        register_count: 1
+        scale: 0.1
+        enabled: false     # 未接线，现场确认后改为 true
+      - kind: current
+        gateway: GW-01
+        slave_id: 4
+        register_address: 0
+        register_count: 3
+        scale: 0.01
+        enabled: false
+
+  - code: M-03
+    name: 主排风机
+    location: 二车间 · 排风机房
+    group: 风机组
+    rated_kw: 160
+    rated_current_a: 290
+    pilot: true
+    node_code: N-02
+    vfd_model: 西门子 G120
+    temp_limit_c: 85
+    current_limit_a: 305
+    sensors:
+      - kind: temperature
+        gateway: GW-01
+        slave_id: 5
+        register_address: 0
+        register_count: 1
+        scale: 0.1
+        enabled: false
+      - kind: current
+        gateway: GW-01
+        slave_id: 6
+        register_address: 0
+        register_count: 3
+        scale: 0.01
+        enabled: false
