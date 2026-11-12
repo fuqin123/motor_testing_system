@@ -248,6 +248,9 @@ def persist_cycle(
                     payload["current_avg"],
                     baseline,
                     slope,
+                    current_a=payload["current_a"],
+                    current_b=payload["current_b"],
+                    current_c=payload["current_c"],
                 )
                 alarms = apply_reading_alarms(db, motor, reading, candidates, config, now=ts)
                 new_alarm_ids.extend(alarm.id for alarm in alarms)

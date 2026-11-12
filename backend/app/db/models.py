@@ -67,6 +67,7 @@ class Motor(TimestampMixin, Base):
     current_limit_a: Mapped[float] = mapped_column(Float, default=0.0)
     temp_deviation_pct: Mapped[float] = mapped_column(Float, default=8.0)
     current_deviation_pct: Mapped[float] = mapped_column(Float, default=10.0)
+    phase_imbalance_pct: Mapped[float] = mapped_column(Float, default=10.0)
     rise_rate_limit_c_per_day: Mapped[float] = mapped_column(Float, default=1.0)
     notify_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 

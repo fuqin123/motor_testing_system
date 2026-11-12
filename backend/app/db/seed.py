@@ -198,6 +198,7 @@ def seed_demo(reset: bool = False) -> bool:
                 current_limit_a=config["current_limit_a"],
                 temp_deviation_pct=8.0,
                 current_deviation_pct=10.0,
+                phase_imbalance_pct=10.0,
                 rise_rate_limit_c_per_day=1.0,
                 notify_enabled=True,
             )
@@ -521,6 +522,9 @@ def import_points(path: str) -> dict:
             )
             motor.current_deviation_pct = float(
                 item.get("current_deviation_pct", motor.current_deviation_pct or 10)
+            )
+            motor.phase_imbalance_pct = float(
+                item.get("phase_imbalance_pct", motor.phase_imbalance_pct or 10)
             )
             motor.rise_rate_limit_c_per_day = float(
                 item.get("rise_rate_limit_c_per_day", motor.rise_rate_limit_c_per_day or 1)

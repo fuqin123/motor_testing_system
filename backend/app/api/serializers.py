@@ -115,6 +115,9 @@ def motor_card(
         "online": is_online(latest, now),
         "temperature_c": latest.temperature_c if latest else None,
         "current_avg_a": latest.current_avg_a if latest else None,
+        "current_a": latest.current_a if latest else None,
+        "current_b": latest.current_b if latest else None,
+        "current_c": latest.current_c if latest else None,
         "load_pct": load_pct(motor, latest),
         "temp_deviation_pct": (
             round(temp_deviation_pct, 2) if temp_deviation_pct is not None else None

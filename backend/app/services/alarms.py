@@ -34,6 +34,9 @@ def evaluate_rules(
     current_avg_a: float | None,
     baseline: Baseline | None,
     rise_rate_c_per_day: float | None,
+    current_a: float | None = None,
+    current_b: float | None = None,
+    current_c: float | None = None,
 ) -> list[AlarmCandidate]:
     candidates: list[AlarmCandidate] = []
 
@@ -75,25 +78,35 @@ def evaluate_rules(
                     )
                 )
 
-    if current_avg_a is not None and motor.current_limit_a > 0:
-        if current_avg_a >= motor.current_limit_a:
+    phases = [value for value in (current_a, current_b, current_c) if value is not None]
+    peak_current = max(phases) if phases else current_avg_a
+    if peak_current is not None and motor.current_limit_a > 0:
+        if peak_current >= motor.current_limit_a:
+            if len(phases) == 3:
+                phase_text = (
+                    f"三相电流 A/B/C = {current_a:.1f} / {current_b:.1f} / {current_c:.1f} A"
+                )
+                title = "三相电流越限"
+            else:
+                phase_text = f"运行电流 {peak_current:.1f} A"
+                title = "运行电流越限"
             candidates.append(
                 AlarmCandidate(
                     level="crit",
                     rule_key="current_high",
-                    title="运行电流越限",
+                    title=title,
                     description=(
-                        f"运行电流 {current_avg_a:.1f} A 超过上限 {motor.current_limit_a:.1f} A，"
-                        "可能存在过载或电气异常。"
+                        f"{phase_text}，最高相超过上限 {motor.current_limit_a:.1f} A，"
+                        "可能存在过载或单相电气异常。"
                     ),
-                    metric="current_avg_a",
-                    value=current_avg_a,
+                    metric="current_phase_max_a" if len(phases) == 3 else "current_avg_a",
+                    value=peak_current,
                     threshold=motor.current_limit_a,
                     unit="A",
-                    advice="检查负载侧机械阻力、阀门开度与变频器输出平衡。",
+                    advice="检查三相负载平衡、接线端子、变频器输出与机械阻力。",
                 )
             )
-        elif baseline and baseline.current_median:
+        elif baseline and baseline.current_median and current_avg_a is not None:
             current_dev = deviation_pct(current_avg_a, baseline.current_median)
             if current_dev is not None and abs(current_dev) >= motor.current_deviation_pct:
                 direction = "偏高" if current_dev > 0 else "偏低"
@@ -111,6 +124,29 @@ def evaluate_rules(
                         threshold=motor.current_deviation_pct,
                         unit="%",
                         advice="检查负载变化、变频器输出与三相电流平衡。",
+                    )
+                )
+
+    if len(phases) == 3 and motor.phase_imbalance_pct > 0:
+        phase_mean = sum(phases) / 3
+        if phase_mean > 0:
+            imbalance = (max(phases) - min(phases)) / phase_mean * 100
+            if imbalance >= motor.phase_imbalance_pct:
+                level = "crit" if imbalance >= motor.phase_imbalance_pct * 2 else "warn"
+                candidates.append(
+                    AlarmCandidate(
+                        level=level,
+                        rule_key="current_imbalance",
+                        title="三相电流不平衡",
+                        description=(
+                            f"三相电流 A/B/C = {current_a:.1f} / {current_b:.1f} / {current_c:.1f} A，"
+                            f"不平衡度 {imbalance:.1f}% 超过阈值 {motor.phase_imbalance_pct:.1f}%。"
+                        ),
+                        metric="current_imbalance_pct",
+                        value=imbalance,
+                        threshold=motor.phase_imbalance_pct,
+                        unit="%",
+                        advice="检查三相接线、接触器触点、负载分配与变频器输出平衡。",
                     )
                 )
 

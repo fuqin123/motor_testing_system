@@ -26,6 +26,7 @@ motors:
     vfd_model: ABB ACS580
     temp_limit_c: 85
     current_limit_a: 252
+    phase_imbalance_pct: 10
     sensors:
       - kind: temperature
         gateway: GW-01
@@ -53,6 +54,7 @@ motors:
     vfd_model: ABB ACS580
     temp_limit_c: 85
     current_limit_a: 252
+    phase_imbalance_pct: 10
     sensors:
       - kind: temperature
         gateway: GW-01
@@ -80,6 +82,7 @@ motors:
     vfd_model: 西门子 G120
     temp_limit_c: 85
     current_limit_a: 305
+    phase_imbalance_pct: 10
     sensors:
       - kind: temperature
         gateway: GW-01

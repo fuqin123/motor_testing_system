@@ -336,3 +336,30 @@ def test_unit_id_kwargs_supports_pymodbus_versions():
 
     assert unit_id_kwargs(old_api, 3) == {"slave": 3}
     assert unit_id_kwargs(new_api, 3) == {"device_id": 3}
+
+
+def test_three_phase_current_high_and_imbalance():
+    motor = motor_stub()
+    motor.current_limit_a = 105.0
+    motor.phase_imbalance_pct = 10.0
+
+    normal = evaluate_rules(
+        motor, None, 100.0, None, None, current_a=100.0, current_b=101.0, current_c=99.0
+    )
+    assert {item.rule_key for item in normal} == set()
+
+    abnormal = evaluate_rules(
+        motor, None, 98.3, None, None, current_a=110.0, current_b=90.0, current_c=95.0
+    )
+    keys = {item.rule_key for item in abnormal}
+    assert "current_high" in keys
+    assert "current_imbalance" in keys
+    imbalance = next(item for item in abnormal if item.rule_key == "current_imbalance")
+    assert imbalance.value > 10
+    assert imbalance.level in ("warn", "crit")
+
+    severe = evaluate_rules(
+        motor, None, 100.0, None, None, current_a=130.0, current_b=80.0, current_c=90.0
+    )
+    severe_imbalance = next(item for item in severe if item.rule_key == "current_imbalance")
+    assert severe_imbalance.level == "crit"

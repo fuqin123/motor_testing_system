@@ -17,6 +17,7 @@ class ThresholdUpdate(BaseModel):
     current_limit_a: float | None = Field(default=None, ge=0, le=20000)
     temp_deviation_pct: float | None = Field(default=None, ge=0, le=100)
     current_deviation_pct: float | None = Field(default=None, ge=0, le=100)
+    phase_imbalance_pct: float | None = Field(default=None, ge=0, le=100)
     rise_rate_limit_c_per_day: float | None = Field(default=None, ge=0, le=50)
     notify_enabled: bool | None = None
     pilot: bool | None = None
@@ -70,6 +71,7 @@ class MotorUpsert(BaseModel):
     current_limit_a: float = Field(default=0, ge=0, le=20000)
     temp_deviation_pct: float = Field(default=8, ge=0, le=100)
     current_deviation_pct: float = Field(default=10, ge=0, le=100)
+    phase_imbalance_pct: float = Field(default=10, ge=0, le=100)
     rise_rate_limit_c_per_day: float = Field(default=1, ge=0, le=50)
     notify_enabled: bool = True
 
