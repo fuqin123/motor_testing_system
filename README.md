@@ -45,7 +45,7 @@ docker compose up -d --build
 
 访问：
 
-- 前端：<http://服务器IP:8080>
+- 前端：<http://服务器IP:8080>（若 8080 被占用，在 `.env` 设置 `WEB_PORT=8081` 后执行 `docker compose up -d web`）
 - API 文档：<http://服务器IP:8000/api/docs>
 - 健康检查：<http://服务器IP:8000/api/v1/health>
 
