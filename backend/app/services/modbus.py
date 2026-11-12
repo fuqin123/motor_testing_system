@@ -1,9 +1,11 @@
 """Modbus RTU over TCP / Modbus TCP 读取。"""
 
+import inspect
 import logging
 import time
 from dataclasses import dataclass, field
 
+import pymodbus
 from pymodbus import FramerType
 from pymodbus.client import ModbusTcpClient
 
@@ -61,6 +63,16 @@ class GatewayReadResult:
     error: str | None = None
 
 
+def unit_id_kwargs(read_method, slave_id: int) -> dict[str, int]:
+    """兼容 pymodbus 3.8（slave）与 3.9+（device_id）的从站参数。"""
+    parameters = inspect.signature(read_method).parameters
+    if "device_id" in parameters:
+        return {"device_id": slave_id}
+    if "slave" in parameters:
+        return {"slave": slave_id}
+    raise ValueError("pymodbus read_holding_registers 缺少 slave/device_id 参数")
+
+
 def _to_int16(value: int) -> int:
     return value - 0x10000 if value >= 0x8000 else value
 
@@ -112,6 +124,28 @@ def read_gateway(plan: GatewayPlan) -> GatewayReadResult:
                 error=error,
             )
 
+        try:
+            unit_key = next(
+                key
+                for key in ("device_id", "slave")
+                if key in inspect.signature(client.read_holding_registers).parameters
+            )
+        except StopIteration:
+            error = "pymodbus 版本不支持 slave/device_id 从站参数"
+            logger.error("%s gateway=%s", error, plan.code)
+            for sensor in plan.sensors:
+                results[sensor.code] = SensorReadResult(
+                    sensor_code=sensor.code, success=False, error=error
+                )
+            return GatewayReadResult(
+                gateway_code=plan.code,
+                connected=True,
+                duration_ms=int((time.perf_counter() - started) * 1000),
+                sensor_results=results,
+                error=error,
+            )
+        logger.debug("pymodbus=%s unit_key=%s", pymodbus.__version__, unit_key)
+
         for sensor in plan.sensors:
             last_error = None
             for attempt in range(settings.modbus_retries + 1):
@@ -119,7 +153,7 @@ def read_gateway(plan: GatewayPlan) -> GatewayReadResult:
                     response = client.read_holding_registers(
                         address=sensor.register_address,
                         count=sensor.register_count,
-                        device_id=sensor.slave_id,
+                        **{unit_key: sensor.slave_id},
                     )
                     if response.isError():
                         last_error = f"Modbus 异常响应: {response}"

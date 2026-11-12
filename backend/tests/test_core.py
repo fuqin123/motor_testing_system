@@ -323,3 +323,16 @@ def test_device_config_api(client, db):
     response = client.delete("/api/v1/devices/gateways/GW-CFG")
     assert response.status_code == 200
     assert response.json()["deleted"] is True
+
+
+def test_unit_id_kwargs_supports_pymodbus_versions():
+    from app.services.modbus import unit_id_kwargs
+
+    def old_api(address: int, *, count: int = 1, slave: int = 1):
+        return address, count, slave
+
+    def new_api(address: int, *, count: int = 1, device_id: int = 1):
+        return address, count, device_id
+
+    assert unit_id_kwargs(old_api, 3) == {"slave": 3}
+    assert unit_id_kwargs(new_api, 3) == {"device_id": 3}
