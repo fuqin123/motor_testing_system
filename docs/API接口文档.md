@@ -1,6 +1,6 @@
 # API 接口文档
 
-> 版本：v0.2.0 · 2026-11-12
+> 版本：v0.3.0 · 2026-11-12
 > Base URL：`http://<host>:8000/api/v1`
 > 在线文档：`/api/docs`（Swagger UI）· `/api/redoc` · `/api/openapi.json`
 
@@ -338,6 +338,8 @@
 
 ### 4.4 修改阈值
 
+> `current_limit_a` 在三相电流场景下表示**单相电流上限**；`phase_imbalance_pct` 为三相不平衡阈值（默认 10%）。
+
 `PATCH /motors/{code}/thresholds`
 
 请求（字段均可选，至少一个）：
@@ -348,6 +350,7 @@
   "current_limit_a": 252,
   "temp_deviation_pct": 8,
   "current_deviation_pct": 10,
+  "phase_imbalance_pct": 10,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true,
   "pilot": true
@@ -363,6 +366,7 @@
   "current_limit_a": 252.0,
   "temp_deviation_pct": 8.0,
   "current_deviation_pct": 10.0,
+  "phase_imbalance_pct": 10.0,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true,
   "pilot": true
@@ -395,6 +399,7 @@
   "current_limit_a": 252,
   "temp_deviation_pct": 8,
   "current_deviation_pct": 10,
+  "phase_imbalance_pct": 10,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true
 }
@@ -773,6 +778,7 @@
       "current_limit_a": 252,
       "temp_deviation_pct": 8,
       "current_deviation_pct": 10,
+      "phase_imbalance_pct": 10,
       "rise_rate_limit_c_per_day": 1.0,
       "notify_enabled": true
     }
