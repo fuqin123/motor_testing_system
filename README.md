@@ -79,7 +79,7 @@ pip install -r requirements-dev.txt
 
 # 根目录 .env 默认 MP_DATABASE_URL=sqlite:///./data/motor.db
 python -m app.cli init-db
-python -m app.cli seed-demo
+python -m app.cli seed-demo          # 演示数据；真实点表用 import-points ../config/points.yaml
 uvicorn app.main:app --reload --port 8000
 ```
 

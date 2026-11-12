@@ -1,5 +1,6 @@
 # 现场点表：复制为 points.yaml 后按实际接线修改，再执行
-#   python -m app.cli import-points config/points.yaml
+#   本地（backend 目录）：python -m app.cli import-points ../config/points.yaml
+#   Docker：docker compose exec backend python -m app.cli import-points /app/config/points.yaml
 #
 # 温度变送器：保持寄存器 0，1 个字，int16，倍率 0.1，单位 ℃
 # 电流变送器：保持寄存器 0~2，3 个字，int16，倍率 0.01，单位 A（A/B/C 三相）
