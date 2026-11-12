@@ -1,0 +1,39 @@
+# ---- secrets / local env ----
+.env
+.env.*
+!.env.example
+
+# ---- python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---- node ----
+node_modules/
+frontend/dist/
+.npm-cache/
+.vite/
+*.tsbuildinfo
+
+# ---- runtime data ----
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+logs/
+*.log
+
+# ---- ide / os ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- backend runtime db ----
+backend/data/

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MotorPulse · 大电机风险监测平台</title>
+<meta name="description" content="大电机温度/电流 LoRa 无线监测与对比分析平台 — UI 设计参考">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230D1424'/%3E%3Cpath d='M5 17h5l3-8 4 14 3-9 2 3h5' fill='none' stroke='%232DD4EE' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="aurora"></div>
+<div class="grain"></div>
+
+<div class="app">
+  <!-- ============ 侧边导航 ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#04121C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12h4l2.5-7 4 14 3-10 1.8 3h3.7"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">Motor<em>Pulse</em></div>
+        <div class="brand-sub">大电机风险监测平台</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="nav-group">监测中心</div>
+      <button class="nav-item active" data-view="overview"><span class="ic" data-ic="grid"></span><span>监测总览</span></button>
+      <button class="nav-item" data-view="analysis"><span class="ic" data-ic="compare"></span><span>对比分析</span></button>
+      <button class="nav-item" data-view="alarms"><span class="ic" data-ic="bell"></span><span>告警中心</span><span class="nav-badge" id="navAlarmBadge">2</span></button>
+      <div class="nav-group">系统管理</div>
+      <button class="nav-item" data-view="topology"><span class="ic" data-ic="radio"></span><span>设备与链路</span></button>
+      <button class="nav-item" data-view="settings"><span class="ic" data-ic="sliders"></span><span>阈值与通知</span></button>
+    </nav>
+    <div class="side-foot">
+      <div class="pilot-card">
+        <h5>试点运行 <span>第 18 / 30 天</span></h5>
+        <div class="progress"><i style="width:60%"></i></div>
+        <p>3 台关键电机 · 验收倒计时 12 天</p>
+      </div>
+      <div class="user-card">
+        <div class="avatar">王</div>
+        <div><b>王工</b><span>设备科 · 异常响应责任人</span></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ 主区域 ============ -->
+  <div class="main">
+    <header class="topbar">
+      <button class="hamburger" id="hamburger" aria-label="打开导航"><span class="ic" data-ic="menu"></span></button>
+      <div class="page-title">
+        <h1 id="pageTitle">监测总览</h1>
+        <p id="pageCrumb">监测中心 / 监测总览</p>
+      </div>
+      <div class="topbar-right">
+        <label class="search">
+          <span class="ic" data-ic="search"></span>
+          <input id="globalSearch" type="text" placeholder="搜索电机 / 编号 / 位置…" autocomplete="off">
+          <kbd>Ctrl K</kbd>
+        </label>
+        <div class="pill hide-m"><span class="dot live"></span><span id="clock" class="num">--:--:--</span><span style="color:var(--faint)">实时采集 · 30s</span></div>
+        <div class="pill hide-m" title="飞书通知机器人状态"><span class="dot ok"></span>飞书机器人在线</div>
+        <button class="icon-btn" id="bellBtn" aria-label="查看告警"><span class="ic" data-ic="bell"></span><span class="badge" id="bellBadge">2</span></button>
+        <div class="avatar" title="王工 · 设备科">王</div>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- ======== 视图 1:监测总览 ======== -->
+      <section class="view" id="view-overview">
+        <div class="kpi-row" id="kpiRow"></div>
+
+        <div class="ov-grid">
+          <div class="card reveal" style="--d:.08s">
+            <div class="card-head">
+              <h3>温度 · 电流实时趋势</h3>
+              <div class="right">
+                <div class="seg" id="trendRange">
+                  <button data-range="24h" class="active">24 小时</button>
+                  <button data-range="7d">7 天</button>
+                  <button data-range="30d">30 天</button>
+                </div>
+              </div>
+              <div class="sub" style="display:flex;align-items:center;gap:10px;width:100%;margin-top:2px">
+                <span class="dot live"></span><span id="trendLiveTxt">每 30 秒上报一次 · LoRa 无线回传</span>
+              </div>
+            </div>
+            <div style="padding:12px 20px 0;display:flex;gap:7px;flex-wrap:wrap" id="trendChips"></div>
+            <div class="chart-wrap"><div id="trendChart" style="height:308px"></div></div>
+            <div class="legend" style="padding:0 22px 16px" id="trendLegend"></div>
+          </div>
+
+          <div class="rail">
+            <div class="card reveal" style="--d:.14s">
+              <div class="card-head"><h3>LoRa 链路状态</h3><div class="right"><span class="badge ok"><span class="dot"></span>网关在线</span></div></div>
+              <div class="link-stats" id="linkStats"></div>
+              <div class="link-flow">
+                <div class="hop"><b>采集节点 ×3</b>RS485</div><span class="arr ic" data-ic="chevR" data-sz="14"></span>
+                <div class="hop"><b>LoRa 网关</b>470MHz</div><span class="arr ic" data-ic="chevR" data-sz="14"></span>
+                <div class="hop"><b>后台服务</b>厂区网口</div>
+              </div>
+            </div>
+            <div class="card reveal" style="--d:.2s">
+              <div class="card-head"><h3>活跃告警</h3><div class="right"><button class="mini-btn primary" data-goto="alarms">全部告警</button></div></div>
+              <div id="activeAlarms" style="padding:6px 0 8px"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec-head reveal" style="--d:.22s">
+          <h2>电机矩阵</h2>
+          <span class="micro">6 台在线 · 3 台试点</span>
+          <div class="right">
+            <div id="motorFilters" style="display:flex;gap:7px;flex-wrap:wrap">
+              <button class="chip active" data-mf="all">全部</button>
+              <button class="chip" data-mf="crit">严重</button>
+              <button class="chip" data-mf="warn">警告</button>
+              <button class="chip" data-mf="ok">正常</button>
+            </div>
+          </div>
+        </div>
+        <div class="motor-grid" id="motorGrid"></div>
+
+        <div class="ov-bottom">
+          <div class="card reveal" style="--d:.1s">
+            <div class="card-head">
+              <h3>温度 × 电流关联速览</h3>
+              <div class="right"><button class="mini-btn primary" data-goto="analysis">进入对比分析</button></div>
+              <div class="sub">偏离自身基线的百分比 · 点击象限图可定位电机</div>
+            </div>
+            <div class="chart-wrap"><div id="miniQuadrant" style="height:252px"></div></div>
+            <div class="insight"><span class="ic" data-ic="alert"></span><span><b>M-03 主排风机</b> 落入「温度高 · 电流正常」象限 —— 电流正常但温度持续升高，疑似散热、轴承或润滑问题，建议优先安排检查。</span></div>
+          </div>
+          <div class="card reveal" style="--d:.16s">
+            <div class="card-head"><h3>通知与处理闭环</h3><div class="right"><span class="badge info"><span class="dot"></span>飞书直达责任人</span></div></div>
+            <div class="loop-stats">
+              <div class="loop-stat"><div class="v num" style="color:#8FB6FF">5</div><div class="l">今日飞书通知</div></div>
+              <div class="loop-stat"><div class="v num" style="color:#5FE3BB">3</div><div class="l">已闭环</div></div>
+              <div class="loop-stat"><div class="v num">12<small style="font-size:12px;color:var(--muted)"> min</small></div><div class="l">平均响应</div></div>
+            </div>
+            <div class="loop-list" id="loopList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======== 视图 2:对比分析 ======== -->
+      <section class="view" id="view-analysis" hidden>
+        <div class="ana-controls">
+          <div class="seg" id="anaModes">
+            <button data-mode="self" class="active">自身历史对比</button>
+            <button data-mode="peer">同类电机对比</button>
+            <button data-mode="quad">温度 × 电流关联</button>
+            <button data-mode="trend">趋势分析</button>
+          </div>
+          <div class="right" style="margin-left:auto;display:flex;gap:10px;align-items:center">
+            <span style="font-size:12px;color:var(--faint)">分析对象</span>
+            <select class="input" id="anaMotor" style="width:210px"></select>
+          </div>
+        </div>
+
+        <!-- 自身历史 -->
+        <div class="panel" id="panel-self">
+          <div class="ana-grid">
+            <div class="card">
+              <div class="card-head"><h3>当前表现 vs 过去 30 天正常基线</h3>
+                <div class="right"><span class="badge mut">基线 = 历史正常时段 P10–P90</span></div>
+                <div class="sub">自己和自己比：同一台电机现在和过去正常状态比，看温度、电流是否偏高</div>
+              </div>
+              <div class="chart-wrap"><div id="selfChart" style="height:330px"></div></div>
+              <div class="legend" style="padding:0 22px 16px">
+                <span><i style="background:var(--amber)"></i>当前温度</span>
+                <span><i style="background:rgba(255,178,36,.25);border:1px dashed rgba(255,178,36,.6)"></i>正常基线区间</span>
+                <span><i style="background:var(--cyan)"></i>当前电流</span>
+              </div>
+              <div style="padding:0 20px 18px;border-top:1px solid var(--line-soft)">
+                <div class="micro" style="margin:14px 0 6px">温度偏离度走势 · 相对自身基线 %</div>
+                <div id="selfDevChart" style="height:150px"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>偏离判定</h3></div>
+              <div class="gauge-wrap" id="devGauge"></div>
+              <div class="stat-rows" id="selfStats"></div>
+              <div id="selfRules"></div>
+              <div class="advice" id="selfAdvice"></div>
+              <div style="padding:0 20px 20px"><button class="btn btn-primary" id="reportBtn" style="width:100%;justify-content:center"><span class="ic" data-ic="file"></span>生成分析报告</button></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 同类对比 -->
+        <div class="panel" id="panel-peer" hidden>
+          <div class="ana-grid">
+            <div class="card">
+              <div class="card-head"><h3>同功率 · 同工况电机组对比</h3>
+                <div class="right"><div class="seg" id="peerGroup"><button data-g="泵组A" class="active">132kW 泵组</button><button data-g="风机组">风机组</button></div></div>
+                <div class="sub">同类电机比：同功率、同工况电机之间比，看哪台明显异常</div>
+              </div>
+              <div class="chart-wrap"><div id="peerChart" style="height:352px"></div></div>
+              <div class="legend" style="padding:0 22px 16px" id="peerLegend"></div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>综合偏离排名</h3><div class="sub">温度 / 电流偏离基线的加权得分，越高越异常</div></div>
+              <div id="peerRank" style="padding:8px 0 12px"></div>
+              <div class="insight" id="peerInsight"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 温流象限 -->
+        <div class="panel" id="panel-quad" hidden>
+          <div class="ana-grid">
+            <div class="card">
+              <div class="card-head"><h3>温度 × 电流四象限关联图</h3>
+                <div class="right"><span class="badge mut">全部 6 台 · 偏离基线 %</span></div>
+                <div class="sub">温度 + 电流一起看：两个维度交叉定位故障方向，点击数据点查看电机</div>
+              </div>
+              <div class="chart-wrap"><div id="quadChart" style="height:430px"></div></div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>象限解读</h3><div class="sub">规则来自现场运维经验，领导看得懂</div></div>
+              <div class="quad-legend">
+                <div class="quad-item"><i style="background:var(--red)"></i><div><b>左上 · 温度高 / 电流正常</b><p>可能是散热、轴承或润滑问题。当前命中:M-03。</p></div></div>
+                <div class="quad-item"><i style="background:var(--amber)"></i><div><b>右下 · 温度正常 / 电流异常</b><p>可能是负载或电气问题。当前命中:M-05。</p></div></div>
+                <div class="quad-item"><i style="background:var(--magenta)"></i><div><b>右上 · 双高</b><p>过载或综合劣化，需立即核查负载与机械状态。</p></div></div>
+                <div class="quad-item"><i style="background:var(--green)"></i><div><b>左下 · 双正常</b><p>运行健康，保持例行监测即可。</p></div></div>
+              </div>
+              <div class="drawer-sec" style="padding:14px 20px 0"><h4>选中电机</h4><div id="quadDetail"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 趋势 -->
+        <div class="panel" id="panel-trend" hidden>
+          <div class="card">
+            <div class="card-head">
+              <h3>走势与事件标注</h3>
+              <div class="right">
+                <div class="seg" id="trendMetric"><button data-m="both" class="active">温度 + 电流</button><button data-m="temp">仅温度</button><button data-m="amp">仅电流</button></div>
+                <div class="seg" id="anaRange"><button data-range="24h">24 小时</button><button data-range="7d" class="active">7 天</button><button data-range="30d">30 天</button></div>
+              </div>
+              <div class="sub">趋势比较：看一天、一周、一月的走势，判断是偶发还是持续恶化</div>
+            </div>
+            <div class="chart-wrap"><div id="anaTrendChart" style="height:340px"></div></div>
+            <div class="trend-stats" id="trendStats"></div>
+            <div class="insight" id="trendVerdict" style="border-top:1px solid var(--line-soft)"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======== 视图 3:告警中心 ======== -->
+      <section class="view" id="view-alarms" hidden>
+        <div class="alarm-stats" id="alarmStats"></div>
+        <div class="filter-bar">
+          <div id="sevFilters" style="display:flex;gap:7px;flex-wrap:wrap">
+            <button class="chip active" data-sev="all">全部级别</button>
+            <button class="chip" data-sev="crit">严重</button>
+            <button class="chip" data-sev="warn">警告</button>
+            <button class="chip" data-sev="info">提示</button>
+          </div>
+          <div style="width:1px;height:22px;background:var(--line)"></div>
+          <div id="statusFilters" style="display:flex;gap:7px;flex-wrap:wrap">
+            <button class="chip active" data-st="all">全部状态</button>
+            <button class="chip" data-st="open">未处理</button>
+            <button class="chip" data-st="doing">处理中</button>
+            <button class="chip" data-st="closed">已闭环</button>
+          </div>
+          <div class="right" style="margin-left:auto;display:flex;gap:9px;align-items:center">
+            <label class="search" style="display:flex"><span class="ic" data-ic="search"></span><input id="alarmSearch" placeholder="搜索告警…"></label>
+            <button class="btn btn-ghost btn-sm" id="exportAlarms"><span class="ic" data-ic="download"></span>导出 CSV</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table id="alarmTable">
+              <thead><tr>
+                <th style="width:36px"><input type="checkbox" class="checkbox" id="checkAll" aria-label="全选"></th>
+                <th class="sortable" data-sort="level">级别 ⇅</th>
+                <th>告警内容</th>
+                <th>电机 / 设备</th>
+                <th>触发值 / 阈值</th>
+                <th class="sortable" data-sort="time">时间 ⇅</th>
+                <th>飞书通知</th>
+                <th>状态</th>
+                <th style="text-align:right">操作</th>
+              </tr></thead>
+              <tbody id="alarmTbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="bulk-bar" id="bulkBar" hidden>
+          <span>已选 <b id="bulkCount" class="num">0</b> 项</span>
+          <button class="btn btn-primary btn-sm" id="bulkClose">批量闭环</button>
+          <button class="btn btn-ghost btn-sm" id="bulkCancel">取消选择</button>
+        </div>
+      </section>
+
+      <!-- ======== 视图 4:设备与链路 ======== -->
+      <section class="view" id="view-topology" hidden>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-head">
+            <h3>采集 → 传输 → 分析 → 通知 全链路</h3>
+            <div class="right"><span class="badge ok"><span class="dot"></span>全链路正常</span><span class="badge pilot">只监测 · 只报警 · 不控制</span></div>
+            <div class="sub">数据流与方案架构一致 · 点击节点查看设备详情 · 数据不出厂</div>
+          </div>
+          <div class="topo-wrap"><div id="topoSvg"></div></div>
+        </div>
+        <div class="ov-bottom" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);margin-top:0">
+          <div class="card">
+            <div class="card-head"><h3>设备清单</h3><div class="right"><span class="micro" id="devCount"></span></div></div>
+            <div class="table-wrap" style="padding:6px 8px 12px">
+              <table>
+                <thead><tr><th>设备</th><th>类型</th><th>绑定对象</th><th>信号 / 电量</th><th>固件</th><th>最近心跳</th><th>状态</th></tr></thead>
+                <tbody id="deviceTbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>链路事件</h3></div>
+            <div class="link-events" id="linkEvents"></div>
+            <div class="insight"><span class="ic" data-ic="info"></span><span>LoRa 适合温度、电流有效值等低频小数据传输;高频振动分析需另行考虑有线或高速无线方案。</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======== 视图 5:阈值与通知 ======== -->
+      <section class="view" id="view-settings" hidden>
+        <div class="settings-grid">
+          <div>
+            <div class="card set-section">
+              <div class="card-head"><h3>阈值配置</h3><div class="right"><span class="badge mut">超过上限即触发飞书提醒</span></div>
+                <div class="sub">拖动滑杆实时生效预览 · 温度上限 / 电流上限 / 温升速率</div>
+              </div>
+              <div id="thresholdRows"></div>
+            </div>
+            <div class="card set-section">
+              <div class="card-head"><h3>采集与链路参数</h3></div>
+              <div class="set-row"><span class="k">采样上报间隔</span><div class="grow"><select class="input" id="sampleInterval" style="width:160px"><option>15 秒</option><option selected>30 秒</option><option>60 秒</option><option>5 分钟</option></select><span class="hint">LoRa 低频小数据,间隔越短功耗越高</span></div></div>
+              <div class="set-row"><span class="k">LoRa 射频参数</span><div class="grow"><span class="tag">470 MHz</span><span class="tag">SF7</span><span class="tag">BW 125 kHz</span><span class="tag">CR 4/5</span><span class="hint">出厂已按厂区实测优化</span></div></div>
+              <div class="set-row"><span class="k">网关上联方式</span><div class="grow"><select class="input" style="width:160px"><option selected>厂区网口</option><option>4G 备份</option></select><span class="hint">GW-01 当前走现有厂区网络,无需新增布线</span></div></div>
+              <div class="set-row"><span class="k">数据存储</span><div class="grow"><span class="badge ok"><span class="dot"></span>本地数据库 · 数据不出厂</span><select class="input" style="width:150px"><option>保留 90 天</option><option selected>保留 180 天</option><option>保留 1 年</option></select></div></div>
+            </div>
+          </div>
+          <div>
+            <div class="card set-section">
+              <div class="card-head"><h3>飞书通知</h3><div class="right"><span class="badge ok"><span class="dot"></span>机器人在线</span></div></div>
+              <div class="set-row"><span class="k">Webhook 地址</span><div class="grow"><input class="input" id="webhook" value="https://open.feishu.cn/open-apis/bot/v2/hook/••••••••-7f3a" type="text"></div></div>
+              <div class="set-row"><span class="k">通知群</span><div class="grow"><select class="input"><option selected>设备运维告警群(12 人)</option><option>车间管理群(35 人)</option></select></div></div>
+              <div class="set-row" style="align-items:flex-start"><span class="k">异常响应责任人</span><div class="grow" style="flex-wrap:wrap" id="ownerChips"></div></div>
+              <div class="set-row"><span class="k">严重告警</span><div class="grow"><span style="font-size:12.5px;color:var(--muted)">立即推送 + @责任人</span><button class="switch on" data-sw aria-label="严重告警通知开关"></button></div></div>
+              <div class="set-row"><span class="k">警告 / 提示</span><div class="grow"><span style="font-size:12.5px;color:var(--muted)">聚合推送,每 10 分钟一次</span><button class="switch on" data-sw aria-label="警告通知开关"></button></div></div>
+              <div class="set-row"><span class="k">夜间静默</span><div class="grow"><input class="input" type="time" value="22:00" style="width:110px"><span style="color:var(--faint)">至</span><input class="input" type="time" value="06:00" style="width:110px"><span class="hint">严重告警不受静默限制</span></div></div>
+              <div style="padding:14px 20px 18px"><button class="btn btn-ghost" id="testFeishu" style="width:100%;justify-content:center"><span class="ic" data-ic="send"></span>发送测试消息</button></div>
+            </div>
+            <div class="card set-section">
+              <div class="card-head"><h3>试点与验收</h3><div class="right"><span class="badge pilot">第 18 / 30 天</span></div></div>
+              <div class="set-row"><span class="k">试点范围</span><div class="grow" style="flex-wrap:wrap"><span class="tag">M-01 循环水泵</span><span class="tag">M-02 循环水泵</span><span class="tag">M-03 主排风机</span></div></div>
+              <div class="check-item"><span class="ic" data-ic="checkc"></span>异常发现到飞书通知 ≤ 1 分钟(实测 2 秒,达标)</div>
+              <div class="check-item"><span class="ic" data-ic="checkc"></span>试点期非计划停机 0 次(当前 0 次,达标)</div>
+              <div class="check-item"><span class="ic" data-ic="checkc"></span>告警准确率 ≥ 90%(当前 96.2%,达标)</div>
+              <div class="check-item todo"><span class="ic" data-ic="circle"></span>验收报告与推广方案(第 30 天提交,进行中)</div>
+            </div>
+          </div>
+        </div>
+        <div class="save-bar">
+          <span class="ic" data-ic="shield" style="color:var(--green)"></span>
+          <p>配置保存在本地服务器,立即生效;本平台<b style="color:var(--text)">只监测、只报警</b>,不下发任何控制指令。</p>
+          <div style="margin-left:auto;display:flex;gap:10px">
+            <button class="btn btn-ghost" id="resetSettings">恢复默认</button>
+            <button class="btn btn-primary" id="saveSettings"><span class="ic" data-ic="check"></span>保存配置</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- 全局浮层 -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true">
+  <div class="drawer-head" id="drawerHead"></div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+<div class="modal" id="modal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <div class="modal-head" id="modalHead"></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+<div class="toasts" id="toasts"></div>
+<div class="chart-tip" id="chartTip"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
