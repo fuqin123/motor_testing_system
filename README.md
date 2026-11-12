@@ -71,15 +71,29 @@ docker compose restart backend
 
 ### 后端
 
+Ubuntu / Linux：
+
 ```bash
 cd backend
-python -m venv .venv
-.venv/Scripts/activate            # Linux/macOS: source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements-dev.txt
 
 # 根目录 .env 默认 MP_DATABASE_URL=sqlite:///./data/motor.db
 python -m app.cli init-db
 python -m app.cli seed-demo          # 演示数据；真实点表用 import-points ../config/points.yaml
+uvicorn app.main:app --reload --port 8000
+```
+
+Windows（Git Bash / PowerShell）：
+
+```bash
+cd backend
+python -m venv .venv
+.venv/Scripts/activate
+pip install -r requirements-dev.txt
+python -m app.cli init-db
+python -m app.cli seed-demo
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -95,12 +109,28 @@ npm run dev
 
 ### 测试与构建
 
+Ubuntu / Linux：
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m pytest -q
+flake8 app tests
+
+cd ../frontend
+npm run lint
+npm run build
+```
+
+Windows：
+
 ```bash
 cd backend
 .venv/Scripts/python.exe -m pytest -q
 .venv/Scripts/python.exe -m flake8 app tests
 
 cd ../frontend
+npm run lint
 npm run build
 ```
 

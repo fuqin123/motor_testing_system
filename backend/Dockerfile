@@ -7,12 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl tzdata \
-    && rm -rf /var/lib/apt/lists/*
+ARG PIP_INDEX_URL=https://pypi.org/simple
 
 COPY requirements.txt ./
-RUN pip install -r requirements.txt
+RUN pip install --index-url "${PIP_INDEX_URL}" -r requirements.txt
 
 COPY app ./app
 COPY alembic ./alembic
@@ -23,6 +21,6 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8000/api/v1/health || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"
 
 ENTRYPOINT ["docker-entrypoint.sh"]

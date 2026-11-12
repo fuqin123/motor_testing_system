@@ -37,3 +37,6 @@ Thumbs.db
 
 # ---- backend runtime db ----
 backend/data/
+
+# ---- local tooling artifacts ----
+.qoder-credits/
