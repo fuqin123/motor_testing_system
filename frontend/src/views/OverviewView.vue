@@ -61,10 +61,15 @@ const visibleMotors = computed(() =>
   motors.value.filter((motor) => {
     if (motorFilter.value !== 'all' && motor.status !== motorFilter.value) return false
     const query = app.searchQuery.trim().toLowerCase()
-    return !query || `${motor.code} ${motor.name} ${motor.location} ${motor.group}`.toLowerCase().includes(query)
+    return (
+      !query ||
+      `${motor.code} ${motor.name} ${motor.location} ${motor.group}`.toLowerCase().includes(query)
+    )
   }),
 )
-const selectedMotor = computed(() => motors.value.find((motor) => motor.code === trendMotor.value) || null)
+const selectedMotor = computed(
+  () => motors.value.find((motor) => motor.code === trendMotor.value) || null,
+)
 const onlineCount = computed(() => motors.value.filter((motor) => motor.online).length)
 const pilotCount = computed(() => motors.value.filter((motor) => motor.pilot).length)
 const periodLabel = computed(() => (isHistorical.value ? selectedDate.value : '今日'))
@@ -122,7 +127,9 @@ const kpiRows = computed(() => {
       label: '平均外壳温度',
       value: fmt(kpi.avg_temperature_c),
       unit: '°C',
-      delta: isHistorical.value ? `${periodLabel.value} 历史快照` : `每 ${app.intervalMinutes} 分钟采集一次`,
+      delta: isHistorical.value
+        ? `${periodLabel.value} 历史快照`
+        : `每 ${app.intervalMinutes} 分钟采集一次`,
       spark: tempSpark.value,
       deltaClass: 'flat',
     },
@@ -149,22 +156,45 @@ const kpiRows = computed(() => {
   ]
 })
 
-const trendLabels = computed(() => trendPoints.value.map((point) => pointLabel(point.ts, trendRange.value)))
+const trendLabels = computed(() =>
+  trendPoints.value.map((point) => pointLabel(point.ts, trendRange.value)),
+)
 const trendTemp = computed(() => trendPoints.value.map((point) => point.temperature_c))
 const trendCurrent = computed(() => trendPoints.value.map((point) => point.current_avg_a))
 const tempThreshold = computed(() => selectedMotor.value?.temp_limit_c ?? 85)
 const trendSummary = computed(() => {
   const points = trendPoints.value
-  const temps = points.map((point) => point.temperature_c).filter((value): value is number => value !== null)
-  const currents = points.map((point) => point.current_avg_a).filter((value): value is number => value !== null)
-  const lastTemp = [...points].reverse().find((point) => point.temperature_c !== null)?.temperature_c ?? null
-  const lastCurrent = [...points].reverse().find((point) => point.current_avg_a !== null)?.current_avg_a ?? null
+  const temps = points
+    .map((point) => point.temperature_c)
+    .filter((value): value is number => value !== null)
+  const currents = points
+    .map((point) => point.current_avg_a)
+    .filter((value): value is number => value !== null)
+  const lastTemp =
+    [...points].reverse().find((point) => point.temperature_c !== null)?.temperature_c ?? null
+  const lastCurrent =
+    [...points].reverse().find((point) => point.current_avg_a !== null)?.current_avg_a ?? null
   return [
     { label: '温度末值', value: fmt(lastTemp), unit: '°C', color: '#FFC65C' },
-    { label: '最高温度', value: fmt(temps.length ? Math.max(...temps) : null), unit: '°C', color: '#FF8296' },
-    { label: '最低温度', value: fmt(temps.length ? Math.min(...temps) : null), unit: '°C', color: '#7FE7F7' },
+    {
+      label: '最高温度',
+      value: fmt(temps.length ? Math.max(...temps) : null),
+      unit: '°C',
+      color: '#FF8296',
+    },
+    {
+      label: '最低温度',
+      value: fmt(temps.length ? Math.min(...temps) : null),
+      unit: '°C',
+      color: '#7FE7F7',
+    },
     { label: '电流末值', value: fmt(lastCurrent, 0), unit: 'A', color: '#7FE7F7' },
-    { label: '平均电流', value: fmt(currents.length ? average(currents) : null, 0), unit: 'A', color: '#8FB6FF' },
+    {
+      label: '平均电流',
+      value: fmt(currents.length ? average(currents) : null, 0),
+      unit: 'A',
+      color: '#8FB6FF',
+    },
   ]
 })
 
@@ -172,7 +202,11 @@ const linkStats = computed(() => {
   const link = pageOverview.value?.link
   if (!link) return []
   return [
-    { value: `${link.gateways_online} / ${link.gateways_total}`, label: '网关在线', color: '#5FE3BB' },
+    {
+      value: `${link.gateways_online} / ${link.gateways_total}`,
+      label: '网关在线',
+      color: '#5FE3BB',
+    },
     { value: `${link.nodes_online} / ${link.nodes_total}`, label: '节点在线', color: '#5FE3BB' },
     {
       value: link.avg_rssi_dbm === null ? '—' : `${link.avg_rssi_dbm} dBm`,
@@ -189,11 +223,15 @@ const linkStats = computed(() => {
 
 const quadrantInsight = computed(() => {
   const points = quadrant.value?.points || []
-  const tempRisk = points.find((point) => point.temp_deviation_pct >= 8 && point.current_deviation_pct < 10)
+  const tempRisk = points.find(
+    (point) => point.temp_deviation_pct >= 8 && point.current_deviation_pct < 10,
+  )
   if (tempRisk) {
     return `${tempRisk.code} ${tempRisk.name} 落入「温度高 · 电流正常」象限 —— 电流正常但温度偏高，疑似散热、轴承或润滑问题，建议优先检查。`
   }
-  const currentRisk = points.find((point) => point.current_deviation_pct >= 10 && point.temp_deviation_pct < 8)
+  const currentRisk = points.find(
+    (point) => point.current_deviation_pct >= 10 && point.temp_deviation_pct < 8,
+  )
   if (currentRisk) {
     return `${currentRisk.code} ${currentRisk.name} 落入「温度正常 · 电流异常」象限 —— 疑似负载或电气侧波动，建议检查变频器输出与负载。`
   }
@@ -201,7 +239,9 @@ const quadrantInsight = computed(() => {
 })
 
 function riskScore(point: { temp_deviation_pct: number; current_deviation_pct: number }): number {
-  return Math.max(0, point.temp_deviation_pct - 8) + Math.max(0, point.current_deviation_pct - 10) * 1.1
+  return (
+    Math.max(0, point.temp_deviation_pct - 8) + Math.max(0, point.current_deviation_pct - 10) * 1.1
+  )
 }
 
 const riskPoints = computed(() =>
@@ -320,7 +360,9 @@ onMounted(() => {
           <span :class="['dot', isHistorical ? 'ok' : 'live']" />
           {{ isHistorical ? '历史回看' : '实时监测' }}
         </span>
-        <span class="micro">{{ isHistorical ? `数据日期 ${selectedDate}` : `每 ${app.intervalMinutes} 分钟采集` }}</span>
+        <span class="micro">{{
+          isHistorical ? `数据日期 ${selectedDate}` : `每 ${app.intervalMinutes} 分钟采集`
+        }}</span>
         <span v-if="isHistorical" class="badge info">只读快照 · 告警为当日告警</span>
       </div>
       <div class="right">
@@ -330,7 +372,9 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="pageLoading" class="loading-block"><span class="spinner" />正在加载 {{ selectedDate }} 历史数据…</div>
+    <div v-if="pageLoading" class="loading-block">
+      <span class="spinner" />正在加载 {{ selectedDate }} 历史数据…
+    </div>
     <div v-else-if="!pageOverview" class="empty-state card">
       <b>暂无监测数据</b>
       请确认采集器已启动，或执行演示数据初始化。
@@ -347,11 +391,19 @@ onMounted(() => {
             <div class="kpi-ic"><Icon :name="kpi.icon" /></div>
             <span class="kpi-label">{{ kpi.label }}</span>
           </div>
-          <div class="kpi-val num">{{ kpi.value }}<small>{{ kpi.unit }}</small></div>
+          <div class="kpi-val num">
+            {{ kpi.value }}<small>{{ kpi.unit }}</small>
+          </div>
           <div class="kpi-foot">
             <span :class="['kpi-delta', kpi.deltaClass]">{{ kpi.delta }}</span>
             <div class="kpi-spark">
-              <Sparkline v-if="kpi.spark.length > 1" :data="kpi.spark" :color="kpi.color" :width="86" :height="30" />
+              <Sparkline
+                v-if="kpi.spark.length > 1"
+                :data="kpi.spark"
+                :color="kpi.color"
+                :width="86"
+                :height="30"
+              />
             </div>
           </div>
         </div>
@@ -367,10 +419,15 @@ onMounted(() => {
                 :key="range"
                 :class="{ active: trendRange === range }"
                 @click="setRange(range)"
-              >{{ range === '24h' ? '24 小时' : range === '7d' ? '7 天' : '30 天' }}</button>
+              >
+                {{ range === '24h' ? '24 小时' : range === '7d' ? '7 天' : '30 天' }}
+              </button>
             </div>
           </div>
-          <div class="sub" style="display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 2px">
+          <div
+            class="sub"
+            style="display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 2px"
+          >
             <span :class="['dot', isHistorical ? 'ok' : 'live']" />
             <span v-if="isHistorical">历史回看 · {{ selectedDate }} · 按 15 分钟粒度还原</span>
             <span v-else>每 {{ app.intervalMinutes }} 分钟上报一次 · LoRa 无线回传</span>
@@ -380,22 +437,33 @@ onMounted(() => {
         <div class="chart-summary">
           <div v-for="item in trendSummary" :key="item.label" class="chart-summary-item">
             <span>{{ item.label }}</span>
-            <b class="num" :style="{ color: item.color }">{{ item.value }} <small>{{ item.unit }}</small></b>
+            <b class="num" :style="{ color: item.color }"
+              >{{ item.value }} <small>{{ item.unit }}</small></b
+            >
           </div>
         </div>
 
         <div style="padding: 12px 20px 0; display: flex; gap: 7px; flex-wrap: wrap" id="trendChips">
-          <button :class="['chip', trendMotor === null ? 'active' : '']" @click="setTrendMotor(null)">全部均值</button>
+          <button
+            :class="['chip', trendMotor === null ? 'active' : '']"
+            @click="setTrendMotor(null)"
+          >
+            全部均值
+          </button>
           <button
             v-for="motor in motors"
             :key="motor.code"
             :class="['chip', trendMotor === motor.code ? 'active' : '']"
             @click="setTrendMotor(motor.code)"
-          >{{ motor.code }}</button>
+          >
+            {{ motor.code }}
+          </button>
         </div>
 
         <div class="chart-wrap">
-          <div v-if="trendLoading" class="loading-block" style="min-height: 320px"><span class="spinner" />加载趋势…</div>
+          <div v-if="trendLoading" class="loading-block" style="min-height: 320px">
+            <span class="spinner" />加载趋势…
+          </div>
           <LineChart
             v-else-if="trendPoints.length"
             :labels="trendLabels"
@@ -403,15 +471,17 @@ onMounted(() => {
               { name: '外壳温度', color: '#FFB224', data: trendTemp, unit: '°C', area: true },
               { name: '运行电流', color: '#2DD4EE', data: trendCurrent, unit: 'A', yAxisIndex: 1 },
             ]"
-            :thresholds="[{ value: tempThreshold, label: `温度上限 ${tempThreshold}°C`, color: '#FF4D6D' }]"
+            :thresholds="[
+              { value: tempThreshold, label: `温度上限 ${tempThreshold}°C`, color: '#FF4D6D' },
+            ]"
             :height="320"
             y2
           />
           <div v-else class="chart-empty" style="height: 304px">该日期暂无趋势数据</div>
         </div>
         <div class="legend" style="padding: 0 22px 16px">
-          <span><i style="background: #FFB224" />外壳温度 °C（左轴）</span>
-          <span><i style="background: #2DD4EE" />运行电流 A（右轴）</span>
+          <span><i style="background: #ffb224" />外壳温度 °C（左轴）</span>
+          <span><i style="background: #2dd4ee" />运行电流 A（右轴）</span>
           <span style="margin-left: auto; color: var(--faint)">
             {{ selectedMotor ? `${selectedMotor.code} · ${selectedMotor.name}` : '全部电机均值' }} ·
             {{ trendRange === '24h' ? '15 分钟' : trendRange === '7d' ? '1 小时' : '6 小时' }}粒度
@@ -427,7 +497,9 @@ onMounted(() => {
               :tone="pageOverview.link.gateways_online > 0 ? 'ok' : 'warn'"
               :label="pageOverview.link.gateways_online > 0 ? '网关在线' : '网关离线'"
             />
-            <span class="micro">{{ isHistorical ? `${selectedDate} 当日链路统计` : '实时链路' }}</span>
+            <span class="micro">{{
+              isHistorical ? `${selectedDate} 当日链路统计` : '实时链路'
+            }}</span>
           </div>
         </div>
         <div class="link-strip">
@@ -438,9 +510,15 @@ onMounted(() => {
             </div>
           </div>
           <div class="link-flow">
-            <div class="hop"><b>采集点 ×{{ motors.length }}</b>RS485</div>
+            <div class="hop">
+              <b>采集点 ×{{ motors.length }}</b
+              >RS485
+            </div>
             <span class="arr"><Icon name="chevR" :size="14" /></span>
-            <div class="hop"><b>LoRa 网关 ×{{ pageOverview.link.gateways_total }}</b>470MHz</div>
+            <div class="hop">
+              <b>LoRa 网关 ×{{ pageOverview.link.gateways_total }}</b
+              >470MHz
+            </div>
             <span class="arr"><Icon name="chevR" :size="14" /></span>
             <div class="hop"><b>后台服务</b>厂区网口</div>
           </div>
@@ -452,7 +530,10 @@ onMounted(() => {
           <div class="card-head">
             <h3>{{ isHistorical ? '当日告警' : '活跃告警' }}</h3>
             <div class="right">
-              <span class="micro">严重 {{ pageOverview.kpis.critical_alarms }} · 警告 {{ pageOverview.kpis.warning_alarms }}</span>
+              <span class="micro"
+                >严重 {{ pageOverview.kpis.critical_alarms }} · 警告
+                {{ pageOverview.kpis.warning_alarms }}</span
+              >
               <button class="mini-btn primary" @click="router.push('/alarms')">全部告警</button>
             </div>
           </div>
@@ -463,13 +544,16 @@ onMounted(() => {
               class="alert-row"
               @click="openAlarm(alarm.id)"
             >
-              <div :class="['sev', alarm.level]"><Icon :name="alarm.level === 'info' ? 'info' : 'alert'" :size="16" /></div>
+              <div :class="['sev', alarm.level]">
+                <Icon :name="alarm.level === 'info' ? 'info' : 'alert'" :size="16" />
+              </div>
               <div style="min-width: 0">
                 <b>{{ alarm.code }} · {{ alarm.title }}</b>
                 <p>
                   {{ alarm.motor_code || alarm.device_code }} ·
                   <span class="feishu-tag">
-                    <Icon name="send" :size="12" /> {{ NOTIFICATION_TEXT[alarm.notification_status] }}
+                    <Icon name="send" :size="12" />
+                    {{ NOTIFICATION_TEXT[alarm.notification_status] }}
                     {{ alarm.notification_to || alarm.owner }}
                   </span>
                 </p>
@@ -486,34 +570,54 @@ onMounted(() => {
           <div class="card-head">
             <h3>通知与处理闭环</h3>
             <div class="right">
-              <StateBadge :tone="app.feishuConfigured ? 'info' : 'mut'" :label="app.feishuConfigured ? '飞书直达责任人' : '飞书未配置'" />
+              <StateBadge
+                :tone="app.feishuConfigured ? 'info' : 'mut'"
+                :label="app.feishuConfigured ? '飞书直达责任人' : '飞书未配置'"
+              />
             </div>
           </div>
           <div class="loop-stats">
             <div class="loop-stat">
-              <div class="v num" style="color: #8FB6FF">{{ pageOverview.loop.notifications_today }}</div>
+              <div class="v num" style="color: #8fb6ff">
+                {{ pageOverview.loop.notifications_today }}
+              </div>
               <div class="l">{{ isHistorical ? '当日飞书通知' : '今日飞书通知' }}</div>
             </div>
             <div class="loop-stat">
-              <div class="v num" style="color: #5FE3BB">{{ pageOverview.loop.closed_today }}</div>
+              <div class="v num" style="color: #5fe3bb">{{ pageOverview.loop.closed_today }}</div>
               <div class="l">{{ isHistorical ? '当日已闭环' : '今日已闭环' }}</div>
             </div>
             <div class="loop-stat">
               <div class="v num">
-                {{ pageOverview.loop.avg_response_min === null ? '—' : Math.round(pageOverview.loop.avg_response_min) }}
-                <small v-if="pageOverview.loop.avg_response_min !== null" style="font-size: 12px; color: var(--muted)"> min</small>
+                {{
+                  pageOverview.loop.avg_response_min === null
+                    ? '—'
+                    : Math.round(pageOverview.loop.avg_response_min)
+                }}
+                <small
+                  v-if="pageOverview.loop.avg_response_min !== null"
+                  style="font-size: 12px; color: var(--muted)"
+                >
+                  min</small
+                >
               </div>
               <div class="l">平均响应</div>
             </div>
           </div>
           <div v-if="pageOverview.loop.items.length" class="loop-list">
-            <div v-for="item in pageOverview.loop.items" :key="`${item.ts}-${item.text}`" class="loop-item">
+            <div
+              v-for="item in pageOverview.loop.items"
+              :key="`${item.ts}-${item.text}`"
+              class="loop-item"
+            >
               <Icon name="checkc" :size="15" />
               <span>{{ item.text }} · {{ item.who }}</span>
               <time>{{ timeAgo(item.ts) }}</time>
             </div>
           </div>
-          <div v-else class="empty-state" style="padding: 18px 20px">{{ isHistorical ? '该日期暂无闭环记录。' : '今日暂无闭环记录。' }}</div>
+          <div v-else class="empty-state" style="padding: 18px 20px">
+            {{ isHistorical ? '该日期暂无闭环记录。' : '今日暂无闭环记录。' }}
+          </div>
         </div>
       </div>
 
@@ -526,7 +630,9 @@ onMounted(() => {
             :key="filter.key"
             :class="['chip', motorFilter === filter.key ? 'active' : '']"
             @click="motorFilter = filter.key"
-          >{{ filter.label }}</button>
+          >
+            {{ filter.label }}
+          </button>
         </div>
       </div>
       <div v-if="visibleMotors.length" class="motor-grid" id="motorGrid">
@@ -546,7 +652,9 @@ onMounted(() => {
             <span :class="['severity-dot', motor.status]" />
             <b>{{ motor.name }}</b>
             <span class="tag">{{ motor.code }}</span>
-            <span v-if="motor.pilot" class="badge pilot" style="font-size: 10px; padding: 2px 8px">试点</span>
+            <span v-if="motor.pilot" class="badge pilot" style="font-size: 10px; padding: 2px 8px"
+              >试点</span
+            >
             <StateBadge :tone="statusClass(motor.status)" :label="STATUS_TEXT[motor.status]" />
           </div>
           <div class="motor-metrics">
@@ -554,11 +662,16 @@ onMounted(() => {
               <div class="l"><Icon name="thermo" :size="13" /> 外壳温度</div>
               <div class="v num">{{ fmt(motor.temperature_c) }}<small>°C</small></div>
               <div class="motor-spark">
-                <Sparkline :data="motor.spark_temp" :color="motor.status === 'crit' ? '#FF4D6D' : '#FFB224'" :width="100" :height="26" />
+                <Sparkline
+                  :data="motor.spark_temp"
+                  :color="motor.status === 'crit' ? '#FF4D6D' : '#FFB224'"
+                  :width="100"
+                  :height="26"
+                />
               </div>
             </div>
             <div class="mm amp">
-              <div class="l"><Icon name="zap" :size="13" /> 运行电流</div>
+              <div class="l"><Icon name="zap" :size="13" /> 平均电流</div>
               <div class="v num">{{ fmt(motor.current_avg_a, 0) }}<small>A</small></div>
               <div class="motor-spark">
                 <Sparkline :data="motor.spark_current" color="#2DD4EE" :width="100" :height="26" />
@@ -566,11 +679,23 @@ onMounted(() => {
             </div>
           </div>
           <div class="motor-foot">
-            <span :class="['dev-chip', (motor.temp_deviation_pct || 0) >= 8 ? 'up' : (motor.temp_deviation_pct || 0) <= -3 ? 'down' : 'flat']">
+            <span
+              :class="[
+                'dev-chip',
+                (motor.temp_deviation_pct || 0) >= 8
+                  ? 'up'
+                  : (motor.temp_deviation_pct || 0) <= -3
+                    ? 'down'
+                    : 'flat',
+              ]"
+            >
               基线 {{ signed(motor.temp_deviation_pct) }}%
             </span>
             <span>{{ motor.rated_kw }} kW</span>
-            <span class="sep"><Icon name="radio" :size="12" /> {{ motor.node_code }} · 心跳 {{ motor.last_seen_at ? hhmm(motor.last_seen_at) : '—' }}</span>
+            <span class="sep"
+              ><Icon name="radio" :size="12" /> {{ motor.node_code }} · 心跳
+              {{ motor.last_seen_at ? hhmm(motor.last_seen_at) : '—' }}</span
+            >
           </div>
         </div>
       </div>
@@ -583,7 +708,10 @@ onMounted(() => {
             <div class="right">
               <button class="mini-btn primary" @click="goAnalysis()">进入对比分析</button>
             </div>
-            <div class="sub">偏离自身基线的百分比 · 点击象限图可定位电机 · {{ isHistorical ? `${selectedDate} 历史快照` : '实时数据' }}</div>
+            <div class="sub">
+              偏离自身基线的百分比 · 点击象限图可定位电机 ·
+              {{ isHistorical ? `${selectedDate} 历史快照` : '实时数据' }}
+            </div>
           </div>
           <div class="chart-wrap">
             <QuadrantChart
@@ -607,27 +735,51 @@ onMounted(() => {
             <div class="right"><span class="micro">按偏离基线排序</span></div>
           </div>
           <div class="risk-list">
-            <div v-for="(point, index) in riskPoints" :key="point.code" class="risk-row" @click="openMotor(point.code)">
+            <div
+              v-for="(point, index) in riskPoints"
+              :key="point.code"
+              class="risk-row"
+              @click="openMotor(point.code)"
+            >
               <span class="risk-rank">{{ index + 1 }}</span>
               <div class="risk-main">
                 <b>{{ point.code }} {{ point.name }}</b>
                 <p>
-                  温度 <span :style="{ color: point.temp_deviation_pct >= 8 ? '#FF8296' : 'var(--muted)' }">{{ signed(point.temp_deviation_pct) }}%</span>
-                  · 电流 <span :style="{ color: Math.abs(point.current_deviation_pct) >= 10 ? '#FFC65C' : 'var(--muted)' }">{{ signed(point.current_deviation_pct) }}%</span>
+                  温度
+                  <span
+                    :style="{ color: point.temp_deviation_pct >= 8 ? '#FF8296' : 'var(--muted)' }"
+                    >{{ signed(point.temp_deviation_pct) }}%</span
+                  >
+                  · 电流
+                  <span
+                    :style="{
+                      color:
+                        Math.abs(point.current_deviation_pct) >= 10 ? '#FFC65C' : 'var(--muted)',
+                    }"
+                    >{{ signed(point.current_deviation_pct) }}%</span
+                  >
                 </p>
               </div>
               <StateBadge :tone="statusClass(point.status)" :label="STATUS_TEXT[point.status]" />
             </div>
-            <div v-if="!riskPoints.length" class="empty-state" style="padding: 24px 20px">暂无偏离数据。</div>
+            <div v-if="!riskPoints.length" class="empty-state" style="padding: 24px 20px">
+              暂无偏离数据。
+            </div>
           </div>
           <div class="risk-actions">
-            <button class="btn btn-ghost btn-sm" style="width: 100%; justify-content: center" @click="goAnalysis()">
+            <button
+              class="btn btn-ghost btn-sm"
+              style="width: 100%; justify-content: center"
+              @click="goAnalysis()"
+            >
               <Icon name="compare" :size="14" /> 查看完整对比分析
             </button>
           </div>
           <div class="insight" style="border-top: 1px solid var(--line-soft)">
             <Icon name="info" :size="16" />
-            <span>规则来自现场运维经验：温度高/电流正常优先查散热与轴承；电流异常优先查负载与电气。</span>
+            <span
+              >规则来自现场运维经验：温度高/电流正常优先查散热与轴承；电流异常优先查负载与电气。</span
+            >
           </div>
         </div>
       </div>

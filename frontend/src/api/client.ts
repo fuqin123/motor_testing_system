@@ -90,8 +90,7 @@ export const api = {
     request<SelfAnalysis>(`/analysis/self${query({ motor_id: motorCode, range, date })}`),
   peers: (group?: string, date?: string) =>
     request<PeerAnalysis>(`/analysis/peers${query({ group, date })}`),
-  quadrant: (date?: string) =>
-    request<QuadrantAnalysis>(`/analysis/quadrant${query({ date })}`),
+  quadrant: (date?: string) => request<QuadrantAnalysis>(`/analysis/quadrant${query({ date })}`),
   analysisTrend: (motorCode: string, range = '7d', date?: string) =>
     request<TrendAnalysis>(`/analysis/trend${query({ motor_id: motorCode, range, date })}`),
   upsertMotor: (payload: import('./types').MotorConfigPayload) =>
@@ -105,10 +104,9 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   deleteGateway: (code: string) =>
-    request<{ deleted: boolean; code: string }>(
-      `/devices/gateways/${encodeURIComponent(code)}`,
-      { method: 'DELETE' },
-    ),
+    request<{ deleted: boolean; code: string }>(`/devices/gateways/${encodeURIComponent(code)}`, {
+      method: 'DELETE',
+    }),
   upsertSensor: (payload: import('./types').SensorConfigPayload) =>
     request<{ created: boolean; sensor: import('./types').SensorInfo }>('/devices/sensors', {
       method: 'POST',

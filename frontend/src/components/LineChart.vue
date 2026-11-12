@@ -41,6 +41,7 @@ const props = withDefaults(
     band?: ChartBand | null
     markers?: ChartMarker[]
     height?: number
+    fill?: boolean
     y2?: boolean
     y1Name?: string
     y2Name?: string
@@ -50,6 +51,7 @@ const props = withDefaults(
     band: null,
     markers: () => [],
     height: 300,
+    fill: false,
     y2: false,
     y1Name: '',
     y2Name: '',
@@ -293,5 +295,13 @@ watch(
 </script>
 
 <template>
-  <div ref="el" class="line-chart" :style="{ height: `${props.height}px` }" />
+  <div
+    ref="el"
+    class="line-chart"
+    :style="
+      props.fill
+        ? { height: '100%', minHeight: `${props.height}px` }
+        : { height: `${props.height}px` }
+    "
+  />
 </template>

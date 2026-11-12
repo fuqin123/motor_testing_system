@@ -178,7 +178,9 @@ onBeforeUnmount(() => {
   color: var(--text);
   font-size: 12.5px;
   font-weight: 600;
-  transition: border 0.18s, color 0.18s;
+  transition:
+    border 0.18s,
+    color 0.18s;
 }
 .date-trigger:hover,
 .date-trigger[aria-expanded='true'] {
@@ -286,7 +288,9 @@ onBeforeUnmount(() => {
 }
 .date-fade-enter-active,
 .date-fade-leave-active {
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
 }
 .date-fade-enter-from,
 .date-fade-leave-to {

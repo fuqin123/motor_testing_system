@@ -65,6 +65,9 @@ export interface MotorCard extends MotorSummary {
   online: boolean
   temperature_c: number | null
   current_avg_a: number | null
+  current_a: number | null
+  current_b: number | null
+  current_c: number | null
   load_pct: number | null
   temp_deviation_pct: number | null
   last_seen_at: string | null
@@ -218,6 +221,9 @@ export interface PeerMotor {
   status: MotorStatus
   temperature_c: number | null
   current_avg_a: number | null
+  current_a: number | null
+  current_b: number | null
+  current_c: number | null
   load_pct: number | null
   temp_deviation_pct: number | null
   current_deviation_pct: number | null
@@ -345,6 +351,7 @@ export interface ThresholdMotor {
   current_limit_a: number
   temp_deviation_pct: number
   current_deviation_pct: number
+  phase_imbalance_pct: number
   rise_rate_limit_c_per_day: number
   notify_enabled: boolean
 }
@@ -396,7 +403,6 @@ export interface SystemInfo {
   gateways: GatewayInfo[]
 }
 
-
 export interface MotorConfigPayload {
   code: string
   name: string
@@ -414,6 +420,7 @@ export interface MotorConfigPayload {
   current_limit_a: number
   temp_deviation_pct: number
   current_deviation_pct: number
+  phase_imbalance_pct: number
   rise_rate_limit_c_per_day: number
   notify_enabled: boolean
 }

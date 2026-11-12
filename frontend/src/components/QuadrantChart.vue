@@ -11,8 +11,9 @@ const props = withDefaults(
     selected?: string | null
     mini?: boolean
     height?: number
+    fill?: boolean
   }>(),
-  { selected: null, mini: false, height: 430 },
+  { selected: null, mini: false, height: 430, fill: false },
 )
 
 const emit = defineEmits<{ select: [code: string] }>()
@@ -227,7 +228,15 @@ watch(
 </script>
 
 <template>
-  <div ref="el" class="line-chart" :style="{ height: `${props.height}px` }" />
+  <div
+    ref="el"
+    class="line-chart"
+    :style="
+      props.fill
+        ? { height: '100%', minHeight: `${props.height}px` }
+        : { height: `${props.height}px` }
+    "
+  />
   <div v-if="!props.mini" class="quadrant-axis-hint">
     <span>纵轴 · 温度偏离 ↑</span>
     <span>横轴 · 电流偏离 / 波动 →</span>

@@ -64,6 +64,15 @@ const tempData = computed(() => series.value.map((point) => point.temperature_c)
 const currentData = computed(() => series.value.map((point) => point.current_avg_a))
 
 const motor = computed(() => detail.value?.motor || null)
+const phaseImbalance = computed(() => {
+  const values = [motor.value?.current_a, motor.value?.current_b, motor.value?.current_c].filter(
+    (value): value is number => typeof value === 'number',
+  )
+  if (values.length !== 3) return null
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length
+  if (mean <= 0) return null
+  return ((Math.max(...values) - Math.min(...values)) / mean) * 100
+})
 
 function exportCsv() {
   if (!motor.value || !series.value.length) return
@@ -121,12 +130,27 @@ function goAnalysis() {
             </div>
           </div>
           <div class="info-cell">
-            <div class="l">运行电流 / 上限</div>
+            <div class="l">平均电流 / 单相上限</div>
             <div class="v num" style="color: #7fe7f7">
               {{ fmt(motor.current_avg_a) }} A
               <span style="color: var(--faint); font-weight: 400"
                 >/ {{ motor.current_limit_a }} A</span
               >
+            </div>
+          </div>
+          <div class="info-cell">
+            <div class="l">三相电流 A / B / C</div>
+            <div class="v num" style="font-size: 13px; color: #7fe7f7">
+              {{ fmt(motor.current_a) }} / {{ fmt(motor.current_b) }} / {{ fmt(motor.current_c) }} A
+            </div>
+          </div>
+          <div class="info-cell">
+            <div class="l">三相不平衡</div>
+            <div
+              class="v num"
+              :style="{ color: (phaseImbalance || 0) >= 10 ? '#FFC65C' : '#5FE3BB' }"
+            >
+              {{ fmt(phaseImbalance) }} %
             </div>
           </div>
           <div class="info-cell">
@@ -152,7 +176,7 @@ function goAnalysis() {
             :labels="labels"
             :series="[
               { name: '外壳温度', color: '#FFB224', data: tempData, unit: '°C', area: true },
-              { name: '运行电流', color: '#2DD4EE', data: currentData, unit: 'A', yAxisIndex: 1 },
+              { name: '平均电流', color: '#2DD4EE', data: currentData, unit: 'A', yAxisIndex: 1 },
             ]"
             :thresholds="[
               {

@@ -38,6 +38,7 @@ function snapshot(motor: ThresholdMotor): string {
     current_limit_a: motor.current_limit_a,
     temp_deviation_pct: motor.temp_deviation_pct,
     current_deviation_pct: motor.current_deviation_pct,
+    phase_imbalance_pct: motor.phase_imbalance_pct,
     rise_rate_limit_c_per_day: motor.rise_rate_limit_c_per_day,
     notify_enabled: motor.notify_enabled,
   })
@@ -119,6 +120,7 @@ async function saveAll() {
         current_limit_a: motor.current_limit_a,
         temp_deviation_pct: motor.temp_deviation_pct,
         current_deviation_pct: motor.current_deviation_pct,
+        phase_imbalance_pct: motor.phase_imbalance_pct,
         rise_rate_limit_c_per_day: motor.rise_rate_limit_c_per_day,
         notify_enabled: motor.notify_enabled,
       })
@@ -198,7 +200,9 @@ onMounted(() => void load())
             <div class="card-head">
               <h3>阈值配置</h3>
               <div class="right"><span class="badge mut">超过上限即触发飞书提醒</span></div>
-              <div class="sub">温度上限 / 电流上限 / 偏离基线 / 温升速率 · 修改后点击底部保存</div>
+              <div class="sub">
+                温度上限 / 电流上限 / 三相不平衡 / 偏离基线 / 温升速率 · 修改后点击底部保存
+              </div>
             </div>
             <div v-for="motor in thresholdMotors" :key="motor.code" class="settings-motor-block">
               <div class="settings-motor-head">
@@ -233,7 +237,7 @@ onMounted(() => void load())
                   <span class="range-val amber">{{ motor.temp_limit_c }} °C</span>
                 </div>
                 <div class="settings-slider">
-                  <span class="k">电流上限</span>
+                  <span class="k">单相电流上限</span>
                   <input
                     v-model.number="motor.current_limit_a"
                     type="range"
@@ -251,6 +255,20 @@ onMounted(() => void load())
                     <span class="k">温度偏离基线</span>
                     <input
                       v-model.number="motor.temp_deviation_pct"
+                      type="number"
+                      class="input"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      style="width: 90px"
+                      @input="markDirty"
+                    />
+                    <span style="font-size: 12px; color: var(--faint)">%</span>
+                  </div>
+                  <div class="settings-slider">
+                    <span class="k">三相不平衡</span>
+                    <input
+                      v-model.number="motor.phase_imbalance_pct"
                       type="number"
                       class="input"
                       min="0"
@@ -310,8 +328,9 @@ onMounted(() => void load())
             <div class="set-row">
               <span class="k">采集模式 / 下次采集</span>
               <div class="grow">
-                <span class="badge info">{{ collectorMode }}</span
-                ><span class="hint">{{ nextPoll }}</span>
+                <span class="badge info">{{ collectorMode }}</span><span class="hint">{{
+                  nextPoll
+                }}</span>
               </div>
             </div>
             <div class="set-row">
@@ -513,3 +532,32 @@ onMounted(() => void load())
     </template>
   </section>
 </template>
+
+<style scoped>
+#view-settings {
+  min-height: calc(100vh - var(--topbar-h) - 52px);
+  display: flex;
+  flex-direction: column;
+}
+#view-settings .settings-grid {
+  flex: 1;
+  align-items: stretch;
+}
+#view-settings .settings-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+#view-settings .settings-grid > div > .card:last-child {
+  flex: 1;
+}
+@media (max-width: 1200px) {
+  #view-settings {
+    min-height: 0;
+  }
+  #view-settings .settings-grid > div > .card:last-child {
+    flex: none;
+  }
+}
+</style>

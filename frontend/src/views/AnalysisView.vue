@@ -39,9 +39,7 @@ const alarmDrawerOpen = ref(false)
 const activeAlarmId = ref<number | null>(null)
 const reportOpen = ref(false)
 const reportText = ref('')
-const analysisDate = computed(() =>
-  typeof route.query.date === 'string' ? route.query.date : '',
-)
+const analysisDate = computed(() => (typeof route.query.date === 'string' ? route.query.date : ''))
 let initialLoadDone = false
 
 const palette = [
@@ -365,7 +363,9 @@ watch(
         <button
           v-if="analysisDate"
           class="mini-btn"
-          @click="router.replace({ path: '/analysis', query: motorCode ? { motor: motorCode } : {} })"
+          @click="
+            router.replace({ path: '/analysis', query: motorCode ? { motor: motorCode } : {} })
+          "
         >
           回到实时
         </button>
@@ -389,7 +389,13 @@ watch(
       <div v-if="selfData" class="ana-grid">
         <div class="card">
           <div class="card-head">
-            <h3>{{ analysisDate ? '所选日期表现 vs 过去 30 天正常基线' : '当前表现 vs 过去 30 天正常基线' }}</h3>
+            <h3>
+              {{
+                analysisDate
+                  ? '所选日期表现 vs 过去 30 天正常基线'
+                  : '当前表现 vs 过去 30 天正常基线'
+              }}
+            </h3>
             <div class="right"><span class="badge mut">基线 = 历史正常时段 P10–P90</span></div>
             <div class="sub">
               自己和自己比：同一台电机现在和过去正常状态比，看温度、电流是否偏高
@@ -422,6 +428,7 @@ watch(
                 { value: selfTempLimit, label: `上限 ${selfTempLimit}°C`, color: '#FF4D6D' },
               ]"
               :height="330"
+              fill
               y2
             />
             <div v-else class="chart-empty" style="height: 310px">暂无历史数据</div>
@@ -569,8 +576,7 @@ watch(
           <div v-if="peerData.motors.length" class="peer-bars">
             <div v-for="metric in peerMetrics" :key="metric.name" class="peer-metric">
               <div class="peer-metric-head">
-                <b>{{ metric.name }}</b
-                ><span>{{ metric.unit }}</span>
+                <b>{{ metric.name }}</b><span>{{ metric.unit }}</span>
               </div>
               <div
                 v-for="motor in peerData.motors"
@@ -595,8 +601,21 @@ watch(
             </div>
           </div>
           <div v-else class="chart-empty" style="height: 280px">该分组暂无读数</div>
+          <div class="peer-footer">
+            <div>
+              <span>对比组</span><b>{{ peerData.group }}</b>
+            </div>
+            <div>
+              <span>组内电机</span><b>{{ peerData.motors.length }} 台</b>
+            </div>
+            <div>
+              <span>最高偏离</span
+              ><b>{{ peerData.ranking[0]?.code || '—' }} · {{ fmt(peerData.ranking[0]?.score) }}</b>
+            </div>
+            <p>偏离度基于自身 30 天正常基线；数值为当前或所选日期末值。</p>
+          </div>
         </div>
-        <div class="card">
+        <div class="card peer-right">
           <div class="card-head">
             <h3>综合偏离排名</h3>
             <div class="sub">温度 / 电流偏离基线的加权得分，越高越异常</div>
@@ -630,6 +649,13 @@ watch(
               >
             </div>
           </div>
+          <div class="peer-score-note">
+            <b>评分口径</b>
+            <span
+              >综合得分 = 0.6 × 温度偏离 + 0.4 ×
+              电流偏离，仅统计正向偏离；得分越高越需要优先排查。</span
+            >
+          </div>
           <div class="insight">
             <Icon name="info" :size="16" /><span>{{ peerData.insight }}</span>
           </div>
@@ -655,6 +681,7 @@ watch(
               :points="quadData.points"
               :selected="selectedQuadPoint?.code || null"
               :height="430"
+              fill
               @select="selectedQuad = $event"
             />
             <div v-else class="chart-empty" style="height: 410px">暂无基线样本</div>
@@ -775,6 +802,7 @@ watch(
               },
             ]"
             :height="340"
+            fill
             y2
           />
           <div v-else class="chart-empty" style="height: 320px">暂无趋势数据</div>
@@ -865,3 +893,134 @@ watch(
     </BaseModal>
   </section>
 </template>
+
+<style scoped>
+#view-analysis {
+  min-height: calc(100vh - var(--topbar-h) - 52px);
+  display: flex;
+  flex-direction: column;
+}
+#view-analysis .panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#view-analysis .ana-grid {
+  flex: 1;
+  width: 100%;
+  align-items: stretch;
+}
+#view-analysis .ana-grid > .card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#view-analysis .ana-grid .chart-wrap {
+  flex: 1;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+#view-analysis .ana-grid .chart-wrap > .line-chart {
+  flex: 1;
+  min-height: 280px;
+}
+#view-analysis #panel-trend > .card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: calc(100vh - 230px);
+}
+#view-analysis #panel-trend .chart-wrap {
+  flex: 1;
+  min-height: 320px;
+}
+#view-analysis #panel-trend .chart-wrap > .line-chart {
+  flex: 1;
+  min-height: 320px;
+}
+#view-analysis .ana-grid > .card {
+  overflow: hidden;
+}
+#view-analysis .peer-footer {
+  margin-top: auto;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+#view-analysis .peer-footer div {
+  min-width: 90px;
+}
+#view-analysis .peer-footer span {
+  display: block;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+#view-analysis .peer-footer b {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text);
+}
+#view-analysis .peer-footer p {
+  flex-basis: 100%;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--faint);
+}
+#view-analysis .peer-right {
+  display: flex;
+  flex-direction: column;
+}
+#view-analysis .peer-right .rank-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+}
+#view-analysis .peer-right .peer-score-note {
+  padding: 12px 20px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11.5px;
+  color: var(--faint);
+  line-height: 1.6;
+}
+#view-analysis .peer-right .peer-score-note b {
+  display: block;
+  color: var(--text);
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+#view-analysis .peer-right .insight {
+  border-top: 1px solid var(--line-soft);
+}
+#view-analysis #panel-peer .peer-bars {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+}
+#view-analysis #panel-peer .peer-metric {
+  margin-bottom: 0;
+}
+#view-analysis #panel-self > .ana-grid > .card:first-child .chart-wrap {
+  min-height: 320px;
+}
+@media (max-width: 1200px) {
+  #view-analysis {
+    min-height: 0;
+  }
+  #view-analysis .ana-grid,
+  #view-analysis #panel-trend > .card {
+    min-height: 0;
+    height: auto;
+  }
+  #view-analysis .ana-grid .chart-wrap,
+  #view-analysis #panel-trend .chart-wrap {
+    min-height: 300px;
+  }
+}
+</style>
