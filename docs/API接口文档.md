@@ -1,6 +1,6 @@
 # API 接口文档
 
-> 版本：v0.3.0 · 2026-11-12
+> 版本：v0.4.0 · 2026-11-13
 > Base URL：`http://<host>:8000/api/v1`
 > 在线文档：`/api/docs`（Swagger UI）· `/api/redoc` · `/api/openapi.json`
 
@@ -21,7 +21,7 @@
 - `Content-Type: application/json; charset=utf-8`
 - 时间：ISO 8601 UTC，例如 `"2026-11-12T06:30:00Z"`；前端本地化为北京时间。
 - **日期回看**：总览、趋势、分析、电机详情/序列支持 `date=YYYY-MM-DD`（Asia/Shanghai）；省略表示今天/实时，历史日期以所选日结束时刻为 `as_of`，只使用该时刻之前的数据。
-- 数值单位：温度 `°C`，电流 `A`，偏离 `%`，温升 `°C/天`。
+- 数值单位：温度 `°C`，电流 `A`，振动 `mm/s`，偏离 `%`，温升 `°C/天`。
 - 错误格式：
 
 ```json
@@ -60,7 +60,7 @@
 {
   "status": "ok",
   "service": "motor-monitor-api",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "time": "2026-11-12T06:30:00Z"
 }
 ```
@@ -81,9 +81,9 @@
 
 ```json
 {
-  "app": { "name": "MotorPulse 大电机风险监测平台", "version": "0.1.0", "env": "dev", "timezone": "Asia/Shanghai" },
+  "app": { "name": "MotorPulse 大电机风险监测平台", "version": "0.4.0", "env": "dev", "timezone": "Asia/Shanghai" },
   "user": { "name": "设备科 · 观察员", "role": "设备科 · 观察员", "auth_mode": "off" },
-  "counts": { "motors": 6, "gateways": 1, "sensors": 12 },
+  "counts": { "motors": 6, "gateways": 1, "sensors": 18 },
   "sampling": {
     "interval_minutes": 15,
     "last_poll_at": "2026-11-12T06:30:00Z",
@@ -192,12 +192,21 @@
       "rated_current_a": 290,
       "temp_limit_c": 85,
       "current_limit_a": 305,
+      "phase_imbalance_pct": 10,
+      "vibration_limit_mm_s": 4.5,
       "pilot": true,
       "node_code": "N-02",
       "status": "crit",
       "online": true,
       "temperature_c": 87.7,
       "current_avg_a": 196.1,
+      "current_a": 196.0,
+      "current_b": 196.4,
+      "current_c": 195.9,
+      "vibration_x": 2.3,
+      "vibration_y": 2.5,
+      "vibration_z": 2.1,
+      "vibration_total_mm_s": 4.05,
       "load_pct": 67.6,
       "temp_deviation_pct": 19.0,
       "last_seen_at": "2026-11-12T06:30:00Z",
@@ -268,7 +277,8 @@
       "current_avg_a": 196.3,
       "current_a": 196.1,
       "current_b": 196.7,
-      "current_c": 196.0
+      "current_c": 196.0,
+      "vibration_total_mm_s": 4.05
     }
   ]
 }
@@ -290,6 +300,13 @@
       "online": true,
       "temperature_c": 61.4,
       "current_avg_a": 178.1,
+      "current_a": 177.8,
+      "current_b": 178.3,
+      "current_c": 178.2,
+      "vibration_x": 2.1,
+      "vibration_y": 2.3,
+      "vibration_z": 2.0,
+      "vibration_total_mm_s": 3.72,
       "load_pct": 74.2,
       "temp_deviation_pct": 5.3,
       "spark_temp": [60.8, 61.1],
@@ -338,7 +355,7 @@
 
 ### 4.4 修改阈值
 
-> `current_limit_a` 在三相电流场景下表示**单相电流上限**；`phase_imbalance_pct` 为三相不平衡阈值（默认 10%）。
+> `current_limit_a` 在三相电流场景下表示**单相电流上限**；`phase_imbalance_pct` 为三相不平衡阈值（默认 10%）；`vibration_limit_mm_s` 为总振动上限（默认 4.5 mm/s）。
 
 `PATCH /motors/{code}/thresholds`
 
@@ -351,6 +368,7 @@
   "temp_deviation_pct": 8,
   "current_deviation_pct": 10,
   "phase_imbalance_pct": 10,
+  "vibration_limit_mm_s": 4.5,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true,
   "pilot": true
@@ -367,6 +385,7 @@
   "temp_deviation_pct": 8.0,
   "current_deviation_pct": 10.0,
   "phase_imbalance_pct": 10.0,
+  "vibration_limit_mm_s": 4.5,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true,
   "pilot": true
@@ -400,6 +419,7 @@
   "temp_deviation_pct": 8,
   "current_deviation_pct": 10,
   "phase_imbalance_pct": 10,
+  "vibration_limit_mm_s": 4.5,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true
 }
@@ -426,14 +446,15 @@
   "series": [ { "ts": "2026-10-13T00:00:00Z", "temperature_c": 72.1, "current_avg_a": 186.2 } ],
   "band": [ { "ts": "2026-10-13T00:00:00Z", "lo": 69.9, "hi": 76.0 } ],
   "baseline": { "temp_median": 73.53, "temp_p10": 69.87, "temp_p90": 78.91, "current_median": 188.49, "current_p10": 179.68, "current_p90": 197.19, "sample_count": 2880 },
-  "latest": { "temperature_c": 87.4, "current_avg_a": 196.29, "load_pct": 67.7, "ts": "2026-11-12T06:00:00Z" },
+  "latest": { "temperature_c": 87.4, "current_avg_a": 196.29, "current_a": 196.0, "current_b": 196.4, "current_c": 195.9, "vibration_x": 2.3, "vibration_y": 2.5, "vibration_z": 2.1, "vibration_total_mm_s": 4.05, "load_pct": 67.7, "ts": "2026-11-12T06:00:00Z" },
   "deviation": { "temp_pct": 18.86, "current_pct": 4.14 },
   "rise_rate_c_per_day": 1.923,
   "rules": [
     { "key": "temp_deviation", "label": "高于自身基线 8.0%", "hit": true, "detail": "当前偏离 +18.9%" },
     { "key": "temp_high", "label": "超过温度上限 85°C", "hit": true, "detail": "87.4°C / 上限 85.0°C" },
     { "key": "temp_rise", "label": "温升速率超过 1.0°C/天", "hit": true, "detail": "近 7 天 +1.93°C/天 · 8 天样本" },
-    { "key": "current_deviation", "label": "电流偏离基线 10.0%", "hit": false, "detail": "当前偏离 +4.1%" }
+    { "key": "current_deviation", "label": "电流偏离基线 10.0%", "hit": false, "detail": "当前偏离 +4.1%" },
+    { "key": "vibration_high", "label": "振动总值超过 4.50 mm/s", "hit": false, "detail": "4.05 mm/s / 上限 4.50 mm/s" }
   ],
   "verdict": {
     "key": "temp",
@@ -458,6 +479,14 @@
       "status": "ok",
       "temperature_c": 61.4,
       "current_avg_a": 178.1,
+      "current_a": 177.8,
+      "current_b": 178.3,
+      "current_c": 178.2,
+      "vibration_x": 2.1,
+      "vibration_y": 2.3,
+      "vibration_z": 2.0,
+      "vibration_total_mm_s": 3.72,
+      "vibration_limit_mm_s": 4.5,
       "load_pct": 74.2,
       "temp_deviation_pct": 5.3,
       "current_deviation_pct": 4.5,
@@ -779,6 +808,7 @@
       "temp_deviation_pct": 8,
       "current_deviation_pct": 10,
       "phase_imbalance_pct": 10,
+      "vibration_limit_mm_s": 4.5,
       "rise_rate_limit_c_per_day": 1.0,
       "notify_enabled": true
     }
@@ -822,7 +852,7 @@
 
 响应：合并后的通知配置。写入 `audit_logs`。
 
-### 8.3 飞书测试
+### 8.3 Webhook 飞书测试
 
 `POST /settings/feishu/test`
 
@@ -846,6 +876,74 @@
 }
 ```
 
+### 8.4 获取飞书应用配置
+
+`GET /settings/feishu`
+
+```json
+{
+  "enabled": true,
+  "app_id": "cli_xxxxxxxxxxxxxxxx",
+  "chat_id": "oc_xxxxxxxxxxxxxxxx",
+  "secret_set": true,
+  "group_name": "设备运维告警群",
+  "long_connection": {
+    "running": true,
+    "app_id": "cli_xxxxxxxxxxxxxxxx",
+    "last_event_at": null,
+    "last_error": null,
+    "restart_required": false
+  }
+}
+```
+
+- App Secret 永不返回，只返回 `secret_set`。
+- `restart_required=true` 表示 App ID/Secret 已变更或应用已停用，需要重启 backend 重建长连接。
+
+### 8.5 保存飞书应用配置
+
+`PUT /settings/feishu`
+
+字段均可选；`app_secret` 留空表示保持原值：
+
+```json
+{
+  "enabled": true,
+  "app_id": "cli_xxxxxxxxxxxxxxxx",
+  "app_secret": "xxxxxxxx",
+  "chat_id": "oc_xxxxxxxxxxxxxxxx"
+}
+```
+
+响应同 8.4，并触发长连接启动/状态检查。写入 `audit_logs`。
+
+### 8.6 飞书应用测试
+
+`POST /settings/feishu/app/test`
+
+```json
+{
+  "status": "sent",
+  "attempts": 1,
+  "response_code": 0,
+  "detail": "测试消息已发送"
+}
+```
+
+凭据缺失返回 422；发送异常返回 502。
+
+### 8.7 卡片回传（长连接，非 HTTP）
+
+平台通过飞书官方 SDK WebSocket 长连接订阅 `card.action.trigger`，不需要公网回调 URL。卡片按钮 value：
+
+```json
+{ "alarm_id": 7, "resolution": "resolved" }
+```
+
+- `resolved`：告警置为 `closed`，记录 `closed_by=飞书:<open_id>`，设置 30 分钟抑制。
+- `unresolved`：告警置为 `ack`，记录审计。
+- SDK 自动返回 toast；应用被停用/更换后，旧连接回调会被拒绝并提示重启 backend。
+
 ## 9. 错误码示例
 
 | 场景 | HTTP | 响应 |
@@ -866,6 +964,9 @@ curl http://127.0.0.1:8000/api/v1/health
 
 # 总览
 curl http://127.0.0.1:8000/api/v1/dashboard/overview
+
+# 飞书应用状态
+curl http://127.0.0.1:8000/api/v1/settings/feishu
 
 # SSO 代理模式示例
 curl -H "X-Auth-User: wang.gong" \
