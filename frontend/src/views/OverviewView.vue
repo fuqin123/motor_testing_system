@@ -44,6 +44,7 @@ const pageLoading = ref(false)
 
 const trendRange = ref('24h')
 const trendMotor = ref<string | null>(null)
+const trendMetrics = ref<Array<'temp' | 'current' | 'vibration'>>(['temp', 'current'])
 const trendPoints = ref<SeriesPoint[]>([])
 const trendLoading = ref(false)
 const quadrant = ref<QuadrantAnalysis | null>(null)
@@ -161,6 +162,20 @@ const trendLabels = computed(() =>
 )
 const trendTemp = computed(() => trendPoints.value.map((point) => point.temperature_c))
 const trendCurrent = computed(() => trendPoints.value.map((point) => point.current_avg_a))
+const trendVibration = computed(() => trendPoints.value.map((point) => point.vibration_total_mm_s ?? null))
+const trendChartSeries = computed(() => {
+  const result = []
+  if (trendMetrics.value.includes('temp')) {
+    result.push({ name: '外壳温度', color: '#FFB224', data: trendTemp.value, unit: '°C', area: true })
+  }
+  if (trendMetrics.value.includes('current')) {
+    result.push({ name: '平均电流', color: '#2DD4EE', data: trendCurrent.value, unit: 'A', yAxisIndex: 1 as const })
+  }
+  if (trendMetrics.value.includes('vibration')) {
+    result.push({ name: '振动总值', color: '#9D7CFF', data: trendVibration.value, unit: 'mm/s', yAxisIndex: 2 as const })
+  }
+  return result
+})
 const tempThreshold = computed(() => selectedMotor.value?.temp_limit_c ?? 85)
 const trendSummary = computed(() => {
   const points = trendPoints.value
@@ -174,7 +189,13 @@ const trendSummary = computed(() => {
     [...points].reverse().find((point) => point.temperature_c !== null)?.temperature_c ?? null
   const lastCurrent =
     [...points].reverse().find((point) => point.current_avg_a !== null)?.current_avg_a ?? null
-  return [
+  const vibrations = points
+    .map((point) => point.vibration_total_mm_s)
+    .filter((value): value is number => value !== null)
+  const lastVibration =
+    [...points].reverse().find((point) => point.vibration_total_mm_s !== null)
+      ?.vibration_total_mm_s ?? null
+  const items = [
     { label: '温度末值', value: fmt(lastTemp), unit: '°C', color: '#FFC65C' },
     {
       label: '最高温度',
@@ -196,6 +217,18 @@ const trendSummary = computed(() => {
       color: '#8FB6FF',
     },
   ]
+  if (trendMetrics.value.includes('vibration')) {
+    items.push(
+      { label: '振动末值', value: fmt(lastVibration, 2), unit: 'mm/s', color: '#C9B3FF' },
+      {
+        label: '振动均值',
+        value: fmt(vibrations.length ? average(vibrations) : null, 2),
+        unit: 'mm/s',
+        color: '#9D7CFF',
+      },
+    )
+  }
+  return items
 })
 
 const linkStats = computed(() => {
@@ -294,6 +327,16 @@ async function loadQuadrant() {
 function setRange(range: string) {
   trendRange.value = range
   void loadTrend()
+}
+
+function toggleTrendMetric(metric: 'temp' | 'current' | 'vibration') {
+  const current = trendMetrics.value
+  if (current.includes(metric)) {
+    if (current.length === 1) return
+    trendMetrics.value = current.filter((item) => item !== metric)
+  } else {
+    trendMetrics.value = [...current, metric]
+  }
 }
 
 function setTrendMotor(code: string | null) {
@@ -411,7 +454,7 @@ onMounted(() => {
 
       <div class="card trend-card reveal in" style="--d: 0.08s">
         <div class="card-head">
-          <h3>温度 · 电流实时趋势</h3>
+          <h3>温度 · 电流 · 振动趋势</h3>
           <div class="right">
             <div class="seg" id="trendRange">
               <button
@@ -458,6 +501,20 @@ onMounted(() => {
           >
             {{ motor.code }}
           </button>
+          <span class="metric-divider" />
+          <span class="micro">曲线</span>
+          <button
+            v-for="metric in [
+              { key: 'temp' as const, label: '温度' },
+              { key: 'current' as const, label: '电流' },
+              { key: 'vibration' as const, label: '振动' },
+            ]"
+            :key="metric.key"
+            :class="['chip', 'metric-chip', trendMetrics.includes(metric.key) ? 'active' : '']"
+            @click="toggleTrendMetric(metric.key)"
+          >
+            {{ metric.label }}
+          </button>
         </div>
 
         <div class="chart-wrap">
@@ -467,21 +524,26 @@ onMounted(() => {
           <LineChart
             v-else-if="trendPoints.length"
             :labels="trendLabels"
-            :series="[
-              { name: '外壳温度', color: '#FFB224', data: trendTemp, unit: '°C', area: true },
-              { name: '运行电流', color: '#2DD4EE', data: trendCurrent, unit: 'A', yAxisIndex: 1 },
-            ]"
+            :series="trendChartSeries"
             :thresholds="[
               { value: tempThreshold, label: `温度上限 ${tempThreshold}°C`, color: '#FF4D6D' },
             ]"
             :height="320"
             y2
+            :y3="trendMetrics.includes('vibration')"
           />
           <div v-else class="chart-empty" style="height: 304px">该日期暂无趋势数据</div>
         </div>
         <div class="legend" style="padding: 0 22px 16px">
-          <span><i style="background: #ffb224" />外壳温度 °C（左轴）</span>
-          <span><i style="background: #2dd4ee" />运行电流 A（右轴）</span>
+          <span v-if="trendMetrics.includes('temp')"
+            ><i style="background: #ffb224" />外壳温度 °C（左轴）</span
+          >
+          <span v-if="trendMetrics.includes('current')"
+            ><i style="background: #2dd4ee" />平均电流 A（右轴）</span
+          >
+          <span v-if="trendMetrics.includes('vibration')"
+            ><i style="background: #9d7cff" />振动总值 mm/s（第三轴）</span
+          >
           <span style="margin-left: auto; color: var(--faint)">
             {{ selectedMotor ? `${selectedMotor.code} · ${selectedMotor.name}` : '全部电机均值' }} ·
             {{ trendRange === '24h' ? '15 分钟' : trendRange === '7d' ? '1 小时' : '6 小时' }}粒度
@@ -692,6 +754,15 @@ onMounted(() => {
               基线 {{ signed(motor.temp_deviation_pct) }}%
             </span>
             <span>{{ motor.rated_kw }} kW</span>
+            <span
+              v-if="motor.vibration_total_mm_s !== null"
+              class="dev-chip"
+              :class="
+                (motor.vibration_total_mm_s || 0) >= motor.vibration_limit_mm_s ? 'up' : 'flat'
+              "
+            >
+              振动 {{ fmt(motor.vibration_total_mm_s, 2) }} mm/s
+            </span>
             <span class="sep"
               ><Icon name="radio" :size="12" /> {{ motor.node_code }} · 心跳
               {{ motor.last_seen_at ? hhmm(motor.last_seen_at) : '—' }}</span
@@ -838,7 +909,7 @@ onMounted(() => {
 }
 .chart-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
   padding: 14px 20px 0;
 }
@@ -858,6 +929,17 @@ onMounted(() => {
   font-size: 14px;
   color: var(--text);
   white-space: nowrap;
+}
+.metric-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+  margin: 0 3px;
+}
+.metric-chip.active {
+  border-color: rgba(157, 124, 255, 0.5);
+  color: #c9b3ff;
+  background: rgba(157, 124, 255, 0.12);
 }
 .chart-summary-item small {
   font-size: 10px;

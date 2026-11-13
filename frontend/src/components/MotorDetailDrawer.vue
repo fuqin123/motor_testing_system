@@ -62,6 +62,7 @@ watch(
 const labels = computed(() => series.value.map((point) => pointLabel(point.ts, '24h')))
 const tempData = computed(() => series.value.map((point) => point.temperature_c))
 const currentData = computed(() => series.value.map((point) => point.current_avg_a))
+const vibrationData = computed(() => series.value.map((point) => point.vibration_total_mm_s ?? null))
 
 const motor = computed(() => detail.value?.motor || null)
 const phaseImbalance = computed(() => {
@@ -177,6 +178,7 @@ function goAnalysis() {
             :series="[
               { name: '外壳温度', color: '#FFB224', data: tempData, unit: '°C', area: true },
               { name: '平均电流', color: '#2DD4EE', data: currentData, unit: 'A', yAxisIndex: 1 },
+              { name: '振动总值', color: '#9D7CFF', data: vibrationData, unit: 'mm/s', yAxisIndex: 2 },
             ]"
             :thresholds="[
               {
@@ -187,6 +189,7 @@ function goAnalysis() {
             ]"
             :height="210"
             y2
+            y3
           />
         </div>
         <div v-else class="chart-empty">暂无 24 小时数据</div>

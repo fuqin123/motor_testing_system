@@ -5,6 +5,7 @@ const AnalysisView = () => import('@/views/AnalysisView.vue')
 const AlarmsView = () => import('@/views/AlarmsView.vue')
 const TopologyView = () => import('@/views/TopologyView.vue')
 const DeviceConfigView = () => import('@/views/DeviceConfigView.vue')
+const NotificationsView = () => import('@/views/NotificationsView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
 
 const router = createRouter({
@@ -42,10 +43,16 @@ const router = createRouter({
       meta: { title: '设备配置', crumb: '系统管理 / 设备配置 · 电机 / 网关 / 采集点' },
     },
     {
+      path: '/notifications',
+      name: 'notifications',
+      component: NotificationsView,
+      meta: { title: '通知机器人', crumb: '系统管理 / 通知机器人 · 飞书应用与卡片回调闭环' },
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: SettingsView,
-      meta: { title: '阈值与通知', crumb: '系统管理 / 阈值与通知 · 采集参数与飞书机器人' },
+      meta: { title: '阈值配置', crumb: '系统管理 / 阈值配置 · 采集参数与告警阈值' },
     },
     { path: '/:pathMatch(.*)*', redirect: '/overview' },
   ],

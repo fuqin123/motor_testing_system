@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import { api } from '@/api/client'
-import type { NotificationSettings, SettingsResponse, ThresholdMotor } from '@/api/types'
+import type { SettingsResponse, ThresholdMotor } from '@/api/types'
 import Icon from '@/components/Icon.vue'
 import StateBadge from '@/components/StateBadge.vue'
 import { useAppStore } from '@/stores/app'
@@ -14,12 +15,9 @@ const ui = useUiStore()
 
 const settings = ref<SettingsResponse | null>(null)
 const thresholdMotors = ref<ThresholdMotor[]>([])
-const notification = ref<NotificationSettings | null>(null)
 const originals = ref<Record<string, string>>({})
 const dirty = ref(false)
 const saving = ref(false)
-const testing = ref(false)
-const newOwner = ref('')
 
 const lora = computed(() => settings.value?.lora || app.meta?.lora || null)
 const pilot = computed(() => settings.value?.pilot || app.pilot || null)
@@ -39,6 +37,7 @@ function snapshot(motor: ThresholdMotor): string {
     temp_deviation_pct: motor.temp_deviation_pct,
     current_deviation_pct: motor.current_deviation_pct,
     phase_imbalance_pct: motor.phase_imbalance_pct,
+    vibration_limit_mm_s: motor.vibration_limit_mm_s,
     rise_rate_limit_c_per_day: motor.rise_rate_limit_c_per_day,
     notify_enabled: motor.notify_enabled,
   })
@@ -49,7 +48,6 @@ async function load() {
     const data = await api.settings()
     settings.value = data
     thresholdMotors.value = structuredClone(data.motors)
-    notification.value = structuredClone(data.notifications)
     originals.value = Object.fromEntries(data.motors.map((motor) => [motor.code, snapshot(motor)]))
     dirty.value = false
   } catch (error) {
@@ -83,34 +81,8 @@ function toggleNotify(motor: ThresholdMotor) {
   markDirty()
 }
 
-function addOwner() {
-  if (!notification.value) return
-  const value = newOwner.value.trim()
-  if (!value) return
-  if (notification.value.owners.includes(value)) {
-    ui.notify('info', '责任人已存在', value)
-    return
-  }
-  notification.value.owners.push(value)
-  newOwner.value = ''
-  markDirty()
-}
-
-function removeOwner(index: number) {
-  notification.value?.owners.splice(index, 1)
-  markDirty()
-}
-
-function toggleNotificationField(
-  field: 'critical_enabled' | 'warning_enabled' | 'info_enabled' | 'quiet_hours_enabled',
-) {
-  if (!notification.value) return
-  notification.value[field] = !notification.value[field]
-  markDirty()
-}
-
 async function saveAll() {
-  if (!notification.value || saving.value) return
+  if (!settings.value || saving.value) return
   saving.value = true
   try {
     for (const motor of thresholdMotors.value) {
@@ -121,21 +93,12 @@ async function saveAll() {
         temp_deviation_pct: motor.temp_deviation_pct,
         current_deviation_pct: motor.current_deviation_pct,
         phase_imbalance_pct: motor.phase_imbalance_pct,
+        vibration_limit_mm_s: motor.vibration_limit_mm_s,
         rise_rate_limit_c_per_day: motor.rise_rate_limit_c_per_day,
         notify_enabled: motor.notify_enabled,
       })
     }
-    await api.updateNotifications({
-      critical_enabled: notification.value.critical_enabled,
-      warning_enabled: notification.value.warning_enabled,
-      info_enabled: notification.value.info_enabled,
-      quiet_hours_enabled: notification.value.quiet_hours_enabled,
-      quiet_start: notification.value.quiet_start,
-      quiet_end: notification.value.quiet_end,
-      group_name: notification.value.group_name,
-      owners: notification.value.owners,
-    })
-    ui.notify('ok', '配置已保存并生效', '阈值与通知策略已同步到后台服务')
+    ui.notify('ok', '阈值配置已保存并生效', '告警阈值已同步到后台服务')
     await load()
     await app.fetchMeta(true)
   } catch (error) {
@@ -148,27 +111,6 @@ async function saveAll() {
 async function resetSettings() {
   await load()
   ui.notify('info', '已恢复服务器当前配置', '未保存的修改已丢弃')
-}
-
-async function testFeishu() {
-  if (testing.value) return
-  testing.value = true
-  try {
-    const result = await api.testFeishu()
-    if (result.status === 'sent') {
-      ui.notify(
-        'ok',
-        '飞书测试消息已发送',
-        `HTTP ${result.response_code ?? '—'} · 尝试 ${result.attempts} 次`,
-      )
-    } else {
-      ui.notify('warn', '飞书测试未发送', result.detail)
-    }
-  } catch (error) {
-    ui.notify('err', '飞书测试失败', error instanceof Error ? error.message : '')
-  } finally {
-    testing.value = false
-  }
 }
 
 function acceptanceIcon(status: string): string {
@@ -190,7 +132,7 @@ onMounted(() => void load())
 
 <template>
   <section class="view" id="view-settings">
-    <div v-if="!settings || !notification" class="card loading-block">
+    <div v-if="!settings" class="card loading-block">
       <span class="spinner" />加载设置…
     </div>
     <template v-else>
@@ -280,6 +222,20 @@ onMounted(() => void load())
                     <span style="font-size: 12px; color: var(--faint)">%</span>
                   </div>
                   <div class="settings-slider">
+                    <span class="k">振动上限</span>
+                    <input
+                      v-model.number="motor.vibration_limit_mm_s"
+                      type="number"
+                      class="input"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      style="width: 90px"
+                      @input="markDirty"
+                    />
+                    <span style="font-size: 12px; color: var(--faint)">mm/s</span>
+                  </div>
+                  <div class="settings-slider">
                     <span class="k">温升速率线</span>
                     <input
                       v-model.number="motor.rise_rate_limit_c_per_day"
@@ -295,6 +251,49 @@ onMounted(() => void load())
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div>
+          <div class="card set-section">
+            <div class="card-head">
+              <h3>通知机器人</h3>
+              <div class="right">
+                <StateBadge
+                  :tone="settings.feishu.configured ? 'ok' : 'mut'"
+                  :label="settings.feishu.configured ? '通知已配置' : '待配置应用'"
+                />
+              </div>
+              <div class="sub">飞书应用凭据、异常截图、卡片按钮与长连接回调</div>
+            </div>
+            <div class="set-row">
+              <span class="k">通知群</span>
+              <div class="grow">
+                <span class="tag">{{ settings.feishu.group_name || '未命名' }}</span>
+              </div>
+            </div>
+            <div class="set-row">
+              <span class="k">Webhook 回退</span>
+              <div class="grow">
+                <span class="hint">{{
+                  settings.feishu.masked_webhook || '未配置，可仅使用飞书应用发送'
+                }}</span>
+              </div>
+            </div>
+            <div class="set-row">
+              <span class="k">责任人 / 级别 / 静默</span>
+              <div class="grow"><span class="hint">在通知机器人页面统一维护</span></div>
+            </div>
+            <div style="padding: 14px 20px 18px">
+              <RouterLink
+                to="/notifications"
+                class="btn btn-primary"
+                style="width: 100%; justify-content: center"
+              >
+                <Icon name="send" :size="15" /> 打开通知机器人配置
+              </RouterLink>
             </div>
           </div>
 
@@ -347,141 +346,6 @@ onMounted(() => void load())
               <b>{{ lora?.frequency_mhz }}MHz / {{ lora?.baud_rate }}bps</b>。
               若网关频点或串口速率调整，请同步修改部署环境变量并重启采集服务。
             </p>
-          </div>
-        </div>
-
-        <div>
-          <div class="card set-section">
-            <div class="card-head">
-              <h3>飞书通知</h3>
-              <div class="right">
-                <StateBadge
-                  :tone="settings.feishu.configured ? 'ok' : 'mut'"
-                  :label="settings.feishu.configured ? '机器人在线' : '未配置 Webhook'"
-                />
-              </div>
-            </div>
-            <div class="set-row">
-              <span class="k">Webhook 地址</span>
-              <div class="grow">
-                <input
-                  class="input"
-                  :value="
-                    settings.feishu.masked_webhook ||
-                    '未配置（通过环境变量 MP_FEISHU_WEBHOOK_URL 设置）'
-                  "
-                  readonly
-                />
-              </div>
-            </div>
-            <div class="set-row">
-              <span class="k">通知群</span>
-              <div class="grow">
-                <input v-model="notification.group_name" class="input" @input="markDirty" />
-              </div>
-            </div>
-            <div class="set-row" style="align-items: flex-start">
-              <span class="k">异常响应责任人</span>
-              <div class="grow" style="flex-direction: column; align-items: stretch">
-                <div class="owner-chips">
-                  <span
-                    v-for="(owner, index) in notification.owners"
-                    :key="`${owner}-${index}`"
-                    class="person-chip"
-                  >
-                    <span
-                      class="avatar"
-                      style="background: linear-gradient(135deg, #4f8cff, #9d7cff); color: #fff"
-                      >{{ owner.slice(0, 1) }}</span
-                    >
-                    {{ owner }}
-                    <button :aria-label="`移除 ${owner}`" @click="removeOwner(index)">
-                      <Icon name="x" :size="12" />
-                    </button>
-                  </span>
-                </div>
-                <div class="owner-add">
-                  <input
-                    v-model="newOwner"
-                    class="input"
-                    placeholder="如：张工 · 电气"
-                    @keydown.enter.prevent="addOwner"
-                  />
-                  <button class="btn btn-ghost btn-sm" @click="addOwner">
-                    <Icon name="plus" :size="13" /> 添加
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="set-row">
-              <span class="k">严重告警</span>
-              <div class="grow">
-                <span style="font-size: 12.5px; color: var(--muted)">立即推送 + @责任人</span>
-                <button
-                  class="switch"
-                  :class="{ on: notification.critical_enabled }"
-                  aria-label="严重告警通知开关"
-                  @click="toggleNotificationField('critical_enabled')"
-                />
-              </div>
-            </div>
-            <div class="set-row">
-              <span class="k">警告 / 提示</span>
-              <div class="grow">
-                <span style="font-size: 12.5px; color: var(--muted)">按级别开关推送</span>
-                <button
-                  class="switch"
-                  :class="{ on: notification.warning_enabled }"
-                  aria-label="警告通知开关"
-                  @click="toggleNotificationField('warning_enabled')"
-                />
-                <button
-                  class="switch"
-                  :class="{ on: notification.info_enabled }"
-                  aria-label="提示通知开关"
-                  @click="toggleNotificationField('info_enabled')"
-                />
-              </div>
-            </div>
-            <div class="set-row">
-              <span class="k">夜间静默</span>
-              <div class="grow">
-                <button
-                  class="switch"
-                  :class="{ on: notification.quiet_hours_enabled }"
-                  aria-label="夜间静默开关"
-                  @click="toggleNotificationField('quiet_hours_enabled')"
-                />
-                <input
-                  v-model="notification.quiet_start"
-                  class="input"
-                  type="time"
-                  style="width: 105px"
-                  :disabled="!notification.quiet_hours_enabled"
-                  @input="markDirty"
-                />
-                <span style="color: var(--faint)">至</span>
-                <input
-                  v-model="notification.quiet_end"
-                  class="input"
-                  type="time"
-                  style="width: 105px"
-                  :disabled="!notification.quiet_hours_enabled"
-                  @input="markDirty"
-                />
-                <span class="hint">严重告警不受静默限制</span>
-              </div>
-            </div>
-            <div style="padding: 14px 20px 18px">
-              <button
-                class="btn btn-ghost"
-                :disabled="testing"
-                style="width: 100%; justify-content: center"
-                @click="testFeishu"
-              >
-                <Icon name="send" :size="15" /> {{ testing ? '发送中…' : '发送测试消息' }}
-              </button>
-            </div>
           </div>
 
           <div class="card set-section">
@@ -549,15 +413,9 @@ onMounted(() => void load())
   gap: 16px;
   min-width: 0;
 }
-#view-settings .settings-grid > div > .card:last-child {
-  flex: 1;
-}
 @media (max-width: 1200px) {
   #view-settings {
     min-height: 0;
-  }
-  #view-settings .settings-grid > div > .card:last-child {
-    flex: none;
   }
 }
 </style>

@@ -59,6 +59,7 @@ const motorForm = ref<MotorConfigPayload>({
   temp_deviation_pct: 8,
   current_deviation_pct: 10,
   phase_imbalance_pct: 10,
+  vibration_limit_mm_s: 4.5,
   rise_rate_limit_c_per_day: 1,
   notify_enabled: true,
 })
@@ -143,6 +144,7 @@ function openMotorForm(motor?: MotorCard) {
         temp_deviation_pct: threshold?.temp_deviation_pct ?? 8,
         current_deviation_pct: threshold?.current_deviation_pct ?? 10,
         phase_imbalance_pct: threshold?.phase_imbalance_pct ?? 10,
+        vibration_limit_mm_s: threshold?.vibration_limit_mm_s ?? 4.5,
         rise_rate_limit_c_per_day: threshold?.rise_rate_limit_c_per_day ?? 1,
         notify_enabled: threshold?.notify_enabled ?? true,
       }
@@ -164,6 +166,7 @@ function openMotorForm(motor?: MotorCard) {
         temp_deviation_pct: 8,
         current_deviation_pct: 10,
         phase_imbalance_pct: 10,
+        vibration_limit_mm_s: 4.5,
         rise_rate_limit_c_per_day: 1,
         notify_enabled: true,
       }
@@ -171,12 +174,21 @@ function openMotorForm(motor?: MotorCard) {
 }
 
 function applySensorKindDefaults() {
-  const isCurrent = sensorForm.value.kind === 'current'
-  sensorForm.value.register_count = isCurrent ? 3 : 1
-  sensorForm.value.scale = isCurrent ? 0.01 : 0.1
-  sensorForm.value.unit = isCurrent ? 'A' : '℃'
+  const kind = sensorForm.value.kind
+  if (kind === 'vibration') {
+    sensorForm.value.register_address = 1
+    sensorForm.value.register_count = 3
+    sensorForm.value.scale = 0.1
+    sensorForm.value.unit = 'mm/s'
+    if (!sensorForm.value.name.trim()) sensorForm.value.name = '振动速度'
+    return
+  }
+  sensorForm.value.register_address = 0
+  sensorForm.value.register_count = kind === 'current' ? 3 : 1
+  sensorForm.value.scale = kind === 'current' ? 0.01 : 0.1
+  sensorForm.value.unit = kind === 'current' ? 'A' : '℃'
   if (!sensorForm.value.name.trim()) {
-    sensorForm.value.name = isCurrent ? '三相电流' : '外壳温度'
+    sensorForm.value.name = kind === 'current' ? '三相电流' : '外壳温度'
   }
 }
 

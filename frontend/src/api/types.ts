@@ -51,6 +51,8 @@ export interface MotorSummary {
   rated_current_a: number
   temp_limit_c: number
   current_limit_a: number
+  phase_imbalance_pct: number
+  vibration_limit_mm_s: number
   pilot: boolean
   enabled: boolean
   node_code: string
@@ -68,6 +70,10 @@ export interface MotorCard extends MotorSummary {
   current_a: number | null
   current_b: number | null
   current_c: number | null
+  vibration_x: number | null
+  vibration_y: number | null
+  vibration_z: number | null
+  vibration_total_mm_s: number | null
   load_pct: number | null
   temp_deviation_pct: number | null
   last_seen_at: string | null
@@ -159,6 +165,7 @@ export interface SeriesPoint {
   current_a: number | null
   current_b: number | null
   current_c: number | null
+  vibration_total_mm_s?: number | null
 }
 
 export interface TrendSeries {
@@ -224,6 +231,8 @@ export interface PeerMotor {
   current_a: number | null
   current_b: number | null
   current_c: number | null
+  vibration_total_mm_s: number | null
+  vibration_limit_mm_s: number
   load_pct: number | null
   temp_deviation_pct: number | null
   current_deviation_pct: number | null
@@ -296,7 +305,7 @@ export interface GatewayInfo {
 export interface SensorInfo {
   id: number
   code: string
-  kind: 'temperature' | 'current'
+  kind: 'temperature' | 'current' | 'vibration'
   kind_text: string
   name: string
   motor_code: string | null
@@ -352,6 +361,7 @@ export interface ThresholdMotor {
   temp_deviation_pct: number
   current_deviation_pct: number
   phase_imbalance_pct: number
+  vibration_limit_mm_s: number
   rise_rate_limit_c_per_day: number
   notify_enabled: boolean
 }
@@ -421,6 +431,7 @@ export interface MotorConfigPayload {
   temp_deviation_pct: number
   current_deviation_pct: number
   phase_imbalance_pct: number
+  vibration_limit_mm_s: number
   rise_rate_limit_c_per_day: number
   notify_enabled: boolean
 }
@@ -442,7 +453,7 @@ export interface SensorConfigPayload {
   code?: string
   motor_code: string
   gateway_code: string
-  kind: 'temperature' | 'current'
+  kind: 'temperature' | 'current' | 'vibration'
   name: string
   slave_id: number
   register_address: number
@@ -452,4 +463,21 @@ export interface SensorConfigPayload {
   enabled: boolean
   power_type: string
   firmware: string
+}
+
+export interface FeishuLongConnectionStatus {
+  running: boolean
+  app_id: string
+  last_event_at: string | null
+  last_error: string | null
+  restart_required: boolean
+}
+
+export interface FeishuAppSettings {
+  enabled: boolean
+  app_id: string
+  chat_id: string
+  secret_set: boolean
+  group_name: string
+  long_connection: FeishuLongConnectionStatus
 }

@@ -93,6 +93,7 @@ const peerMetrics = computed(() => {
   const definitions = [
     { name: '外壳温度', unit: '°C', dec: 1, key: 'temperature_c' as const },
     { name: '运行电流', unit: 'A', dec: 0, key: 'current_avg_a' as const },
+    { name: '振动总值', unit: 'mm/s', dec: 2, key: 'vibration_total_mm_s' as const },
     { name: '负载率', unit: '%', dec: 1, key: 'load_pct' as const },
     { name: '温度偏离基线', unit: '%', dec: 1, key: 'temp_deviation_pct' as const },
   ]
@@ -653,7 +654,7 @@ watch(
             <b>评分口径</b>
             <span
               >综合得分 = 0.6 × 温度偏离 + 0.4 ×
-              电流偏离，仅统计正向偏离；得分越高越需要优先排查。</span
+              电流偏离，仅统计正向偏离；振动总值按 mm/s 并列参与同类对比。</span
             >
           </div>
           <div class="insight">

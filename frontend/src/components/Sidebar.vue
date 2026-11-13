@@ -20,7 +20,8 @@ const navItems = [
   { to: '/alarms', label: '告警中心', icon: 'bell', group: '监测中心' },
   { to: '/topology', label: '设备与链路', icon: 'radio', group: '系统管理' },
   { to: '/device-config', label: '设备配置', icon: 'cpu', group: '系统管理' },
-  { to: '/settings', label: '阈值与通知', icon: 'sliders', group: '系统管理' },
+  { to: '/notifications', label: '通知机器人', icon: 'send', group: '系统管理' },
+  { to: '/settings', label: '阈值配置', icon: 'sliders', group: '系统管理' },
 ]
 </script>
 

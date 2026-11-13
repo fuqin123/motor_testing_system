@@ -165,6 +165,17 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+  feishuSettings: () => request<import('./types').FeishuAppSettings>('/settings/feishu'),
+  updateFeishuSettings: (payload: Record<string, unknown>) =>
+    request<import('./types').FeishuAppSettings>('/settings/feishu', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  testFeishuApp: () =>
+    request<{ status: string; attempts: number; response_code: number | null; detail: string }>(
+      '/settings/feishu/app/test',
+      { method: 'POST' },
+    ),
   testFeishu: () =>
     request<{ status: string; attempts: number; response_code: number | null; detail: string }>(
       '/settings/feishu/test',

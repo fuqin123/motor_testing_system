@@ -8,7 +8,7 @@ export interface ChartSeries {
   name: string
   color: string
   data: (number | null)[]
-  yAxisIndex?: 0 | 1
+  yAxisIndex?: 0 | 1 | 2
   unit?: string
   area?: boolean
   width?: number
@@ -19,7 +19,7 @@ export interface ChartThreshold {
   value: number
   label: string
   color: string
-  yAxisIndex?: 0 | 1
+  yAxisIndex?: 0 | 1 | 2
 }
 
 export interface ChartMarker {
@@ -43,8 +43,10 @@ const props = withDefaults(
     height?: number
     fill?: boolean
     y2?: boolean
+    y3?: boolean
     y1Name?: string
     y2Name?: string
+    y3Name?: string
   }>(),
   {
     thresholds: () => [],
@@ -53,8 +55,10 @@ const props = withDefaults(
     height: 300,
     fill: false,
     y2: false,
+    y3: false,
     y1Name: '',
     y2Name: '',
+    y3Name: '',
   },
 )
 
@@ -131,6 +135,21 @@ function buildOption(): echarts.EChartsOption {
     yAxis.push({
       type: 'value',
       name: props.y2Name,
+      position: 'right',
+      nameTextStyle: { color: '#5B6A8C', fontSize: 10.5, padding: [0, 0, 4, 0] },
+      scale: true,
+      axisLabel: { color: '#5B6A8C', fontSize: 10.5, formatter: axisNumber },
+      splitLine: { show: false },
+      axisLine: { show: false },
+      axisTick: { show: false },
+    })
+  }
+  if (props.y3) {
+    yAxis.push({
+      type: 'value',
+      name: props.y3Name,
+      position: 'right',
+      offset: 48,
       nameTextStyle: { color: '#5B6A8C', fontSize: 10.5, padding: [0, 0, 4, 0] },
       scale: true,
       axisLabel: { color: '#5B6A8C', fontSize: 10.5, formatter: axisNumber },
@@ -220,7 +239,7 @@ function buildOption(): echarts.EChartsOption {
     textStyle: {
       fontFamily: "Inter, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
     },
-    grid: { left: 48, right: props.y2 ? 54 : 20, top: 24, bottom: 32 },
+    grid: { left: 48, right: props.y3 ? 90 : props.y2 ? 54 : 20, top: 24, bottom: 32 },
     tooltip: {
       trigger: 'axis',
       backgroundColor: 'rgba(13,20,36,.96)',
@@ -288,7 +307,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [props.labels, props.series, props.thresholds, props.band, props.markers, props.y2],
+  () => [props.labels, props.series, props.thresholds, props.band, props.markers, props.y2, props.y3],
   () => render(),
   { deep: true },
 )
