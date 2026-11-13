@@ -138,12 +138,13 @@ onMounted(() => void load())
     <template v-else>
       <div class="settings-grid">
         <div>
-          <div class="card set-section">
+          <div class="card set-section threshold-card">
             <div class="card-head">
               <h3>阈值配置</h3>
               <div class="right"><span class="badge mut">超过上限即触发飞书提醒</span></div>
               <div class="sub">
-                温度上限 / 电流上限 / 三相不平衡 / 偏离基线 / 温升速率 · 修改后点击底部保存
+                温度上限 / 单相电流上限 / 三相不平衡 / 振动上限 / 偏离基线 / 温升速率 ·
+                修改后点击底部保存
               </div>
             </div>
             <div v-for="motor in thresholdMotors" :key="motor.code" class="settings-motor-block">
@@ -257,7 +258,7 @@ onMounted(() => void load())
         </div>
 
         <div>
-          <div class="card set-section">
+          <div class="card set-section notify-card">
             <div class="card-head">
               <h3>通知机器人</h3>
               <div class="right">
@@ -297,7 +298,7 @@ onMounted(() => void load())
             </div>
           </div>
 
-          <div class="card set-section">
+          <div class="card set-section link-card">
             <div class="card-head"><h3>采集与链路参数</h3></div>
             <div class="set-row">
               <span class="k">采样上报间隔</span>
@@ -348,7 +349,7 @@ onMounted(() => void load())
             </p>
           </div>
 
-          <div class="card set-section">
+          <div class="card set-section pilot-card">
             <div class="card-head">
               <h3>试点与验收</h3>
               <div class="right">
@@ -405,17 +406,69 @@ onMounted(() => void load())
 }
 #view-settings .settings-grid {
   flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
   align-items: stretch;
 }
 #view-settings .settings-grid > div {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
+  display: contents;
+}
+#view-settings .settings-grid .set-section {
+  margin-bottom: 0;
+}
+#view-settings .threshold-card,
+#view-settings .pilot-card {
+  grid-column: 1 / -1;
+}
+#view-settings .notify-card {
+  grid-column: 1 / 2;
+}
+#view-settings .link-card {
+  grid-column: 2 / 3;
+}
+#view-settings .threshold-card .settings-motor-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
+}
+#view-settings .threshold-card .settings-two-col {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 22px;
 }
 @media (max-width: 1200px) {
   #view-settings {
     min-height: 0;
+  }
+  #view-settings .settings-grid {
+    grid-template-columns: 1fr;
+  }
+  #view-settings .threshold-card,
+  #view-settings .pilot-card,
+  #view-settings .notify-card,
+  #view-settings .link-card {
+    grid-column: auto;
+  }
+}
+@media (max-width: 900px) {
+  #view-settings .threshold-card .settings-motor-body {
+    grid-template-columns: 1fr;
+  }
+  #view-settings .threshold-card .settings-two-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  #view-settings .threshold-card .settings-two-col {
+    grid-template-columns: 1fr;
+  }
+  #view-settings .settings-motor-head .hint {
+    display: none;
+  }
+  #view-settings .settings-motor-head .switch {
+    margin-left: auto;
   }
 }
 </style>

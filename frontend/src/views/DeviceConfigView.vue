@@ -846,13 +846,14 @@ onMounted(() => void load())
       <div class="form-grid">
         <label class="form-field"
           ><span class="form-label">采集点编码</span
-          ><input v-model="sensorForm.code" class="input" placeholder="留空自动生成 T-07/C-07"
+          ><input v-model="sensorForm.code" class="input" placeholder="留空自动生成 T-07/C-07/V-07"
         /></label>
         <label class="form-field"
           ><span class="form-label">类型</span
           ><select v-model="sensorForm.kind" class="input" @change="applySensorKindDefaults">
             <option value="temperature">温度</option>
             <option value="current">三相电流</option>
+            <option value="vibration">振动速度</option>
           </select></label
         >
         <label class="form-field"
@@ -908,7 +909,7 @@ onMounted(() => void load())
         /></label>
         <label class="form-field"
           ><span class="form-label">单位</span
-          ><input v-model="sensorForm.unit" class="input" placeholder="℃ / A"
+          ><input v-model="sensorForm.unit" class="input" placeholder="℃ / A / mm/s"
         /></label>
         <label class="form-field"
           ><span class="form-label">供电方式</span
@@ -928,8 +929,9 @@ onMounted(() => void load())
         >
       </div>
       <div class="form-hint">
-        温度通常：从站 1、寄存器 0、数量 1、倍率 0.1；电流通常：数量 3、倍率
-        0.01。请以现场设备手册为准。
+        温度通常：从站 1、寄存器 0、数量 1、倍率 0.1；电流通常：寄存器 0–2、数量
+        3、倍率 0.01；振动通常：寄存器 1–3（X/Y/Z）、数量 3、倍率 0.1、单位 mm/s。
+        请以现场设备手册为准。
       </div>
       <div class="form-actions">
         <button class="btn btn-ghost" @click="sensorModal = false">取消</button>
