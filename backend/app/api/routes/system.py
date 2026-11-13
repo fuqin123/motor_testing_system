@@ -11,7 +11,11 @@ from app.db.models import Gateway, Motor, PollCycle, Sensor
 from app.schemas import PollResponse
 from app.services.acceptance import acceptance_snapshot
 from app.services.collector import get_collector, request_manual_poll
-from app.services.settings import get_notification_config
+from app.services.settings import (
+    get_feishu_app_config,
+    get_notification_config,
+    public_feishu_app_config,
+)
 
 router = APIRouter(tags=["系统"])
 
@@ -47,6 +51,7 @@ def system_info(
     user: UserContext = Depends(get_current_user),
 ) -> dict:
     notification = get_notification_config(db)
+    app_public = public_feishu_app_config(get_feishu_app_config(db))
     gateways = list(db.scalars(select(Gateway).order_by(Gateway.code)).all())
     pilot = pilot_info(settings.pilot_start_date, settings.pilot_days, settings.pilot_scope)
     collector = get_collector()
@@ -76,7 +81,14 @@ def system_info(
             "cr": settings.lora_cr,
         },
         "feishu": {
-            "configured": settings.feishu_configured,
+            **app_public,
+            "configured": (
+                app_public["enabled"]
+                and app_public["secret_set"]
+                and bool(app_public["app_id"])
+                and bool(app_public["chat_id"])
+            )
+            or settings.feishu_configured,
             "masked_webhook": settings.masked_webhook(),
             "group_name": notification.get("group_name", "设备运维告警群"),
         },

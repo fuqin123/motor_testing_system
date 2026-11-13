@@ -97,7 +97,7 @@ def _auto_sensor_code(motor_code: str, kind: str) -> str:
         if digits
         else "".join(char for char in motor_code if char.isalnum()) or "00"
     )
-    prefix = "T" if kind == "temperature" else "C"
+    prefix = {"temperature": "T", "current": "C", "vibration": "V"}.get(kind, "S")
     return f"{prefix}-{suffix}"[:32]
 
 

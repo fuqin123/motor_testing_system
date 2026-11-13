@@ -18,6 +18,7 @@ class ThresholdUpdate(BaseModel):
     temp_deviation_pct: float | None = Field(default=None, ge=0, le=100)
     current_deviation_pct: float | None = Field(default=None, ge=0, le=100)
     phase_imbalance_pct: float | None = Field(default=None, ge=0, le=100)
+    vibration_limit_mm_s: float | None = Field(default=None, ge=0, le=100)
     rise_rate_limit_c_per_day: float | None = Field(default=None, ge=0, le=50)
     notify_enabled: bool | None = None
     pilot: bool | None = None
@@ -72,6 +73,7 @@ class MotorUpsert(BaseModel):
     temp_deviation_pct: float = Field(default=8, ge=0, le=100)
     current_deviation_pct: float = Field(default=10, ge=0, le=100)
     phase_imbalance_pct: float = Field(default=10, ge=0, le=100)
+    vibration_limit_mm_s: float = Field(default=4.5, ge=0, le=100)
     rise_rate_limit_c_per_day: float = Field(default=1, ge=0, le=50)
     notify_enabled: bool = True
 
@@ -93,7 +95,7 @@ class SensorUpsert(BaseModel):
     code: str | None = Field(default=None, max_length=32)
     motor_code: str = Field(min_length=1, max_length=32)
     gateway_code: str = Field(min_length=1, max_length=32)
-    kind: Literal["temperature", "current"]
+    kind: Literal["temperature", "current", "vibration"]
     name: str = Field(default="", max_length=128)
     slave_id: int = Field(default=1, ge=1, le=247)
     register_address: int = Field(default=0, ge=0, le=65535)
@@ -103,3 +105,10 @@ class SensorUpsert(BaseModel):
     enabled: bool = True
     power_type: str = Field(default="市电供电", max_length=16)
     firmware: str = Field(default="—", max_length=32)
+
+
+class FeishuAppSettingsUpdate(BaseModel):
+    enabled: bool | None = None
+    app_id: str | None = Field(default=None, max_length=128)
+    app_secret: str | None = Field(default=None, max_length=256)
+    chat_id: str | None = Field(default=None, max_length=128)

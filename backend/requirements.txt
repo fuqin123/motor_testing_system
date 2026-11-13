@@ -10,3 +10,5 @@ httpx==0.28.1
 tenacity==9.0.0
 PyYAML==6.0.2
 tzdata==2026.6
+lark-oapi==1.7.5
+Pillow==13.0.0

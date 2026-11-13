@@ -9,6 +9,13 @@ from app.db.session import SessionLocal, engine
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_FEISHU_APP_CONFIG = {
+    "enabled": False,
+    "app_id": "",
+    "app_secret": "",
+    "chat_id": "",
+}
+
 DEFAULT_NOTIFICATION_CONFIG = {
     "critical_enabled": True,
     "warning_enabled": True,
@@ -27,6 +34,8 @@ def init_db() -> None:
     with SessionLocal() as db:
         if db.get(AppConfig, "notifications") is None:
             db.add(AppConfig(key="notifications", value=DEFAULT_NOTIFICATION_CONFIG))
+        if db.get(AppConfig, "feishu_app") is None:
+            db.add(AppConfig(key="feishu_app", value=DEFAULT_FEISHU_APP_CONFIG))
         if db.get(AppConfig, "pilot") is None:
             db.add(
                 AppConfig(

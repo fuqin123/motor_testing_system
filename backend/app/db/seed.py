@@ -137,7 +137,8 @@ DEMO_MOTORS = [
 
 def _sensor_code(motor_code: str, kind: str) -> str:
     digits = "".join(char for char in motor_code if char.isdigit()) or "00"
-    return f"{'T' if kind == 'temperature' else 'C'}-{digits}"
+    prefix = {"temperature": "T", "current": "C", "vibration": "V"}.get(kind, "S")
+    return f"{prefix}-{digits}"
 
 
 def _reset_all(db: Session) -> None:
@@ -199,23 +200,31 @@ def seed_demo(reset: bool = False) -> bool:
                 temp_deviation_pct=8.0,
                 current_deviation_pct=10.0,
                 phase_imbalance_pct=10.0,
+                vibration_limit_mm_s=4.5,
                 rise_rate_limit_c_per_day=1.0,
                 notify_enabled=True,
             )
             db.add(motor)
             db.flush()
-            for kind, slave_id in (("temperature", index * 2 - 1), ("current", index * 2)):
+            temperature_slave = index * 2 - 1
+            current_slave = index * 2
+            sensor_specs = (
+                ("temperature", temperature_slave, 0, 1, 0.1, "℃", "外壳温度"),
+                ("current", current_slave, 0, 3, 0.01, "A", "三相电流"),
+                ("vibration", temperature_slave, 1, 3, 0.1, "mm/s", "振动速度"),
+            )
+            for kind, slave_id, address, count, scale, unit, name in sensor_specs:
                 sensor = Sensor(
                     code=_sensor_code(motor.code, kind),
                     motor_id=motor.id,
                     gateway_id=gateway.id,
                     kind=kind,
-                    name="外壳温度" if kind == "temperature" else "三相电流",
+                    name=name,
                     slave_id=slave_id,
-                    register_address=0,
-                    register_count=1 if kind == "temperature" else 3,
-                    scale=0.1 if kind == "temperature" else 0.01,
-                    unit="℃" if kind == "temperature" else "A",
+                    register_address=address,
+                    register_count=count,
+                    scale=scale,
+                    unit=unit,
                     enabled=True,
                     power_type="市电供电",
                     firmware="—",
@@ -235,7 +244,7 @@ def seed_demo(reset: bool = False) -> bool:
             current += step
 
         rows = []
-        for motor, config in zip(motors, DEMO_MOTORS):
+        for index, (motor, config) in enumerate(zip(motors, DEMO_MOTORS), start=1):
             for ts in timestamps:
                 rng = random.Random(f"{motor.code}:{ts.isoformat()}")
                 local = ts.astimezone(local_zone())
@@ -262,6 +271,14 @@ def seed_demo(reset: bool = False) -> bool:
                 phase_a = current_avg * (1 + (rng.random() - 0.5) * 0.012)
                 phase_b = current_avg * (1 + (rng.random() - 0.5) * 0.012)
                 phase_c = current_avg * (1 + (rng.random() - 0.5) * 0.012)
+                vibration_base = (
+                    5.2
+                    if motor.code.endswith("03")
+                    else config.get("vibration_base", 1.45 + index * 0.06)
+                )
+                vibration_x = vibration_base * (1 + (rng.random() - 0.5) * 0.12)
+                vibration_y = vibration_base * (1 + (rng.random() - 0.5) * 0.12)
+                vibration_z = vibration_base * (1 + (rng.random() - 0.5) * 0.12)
                 rows.append(
                     {
                         "motor_id": motor.id,
@@ -271,6 +288,12 @@ def seed_demo(reset: bool = False) -> bool:
                         "current_b": round(phase_b, 2),
                         "current_c": round(phase_c, 2),
                         "current_avg_a": round((phase_a + phase_b + phase_c) / 3, 2),
+                        "vibration_x": round(vibration_x, 2),
+                        "vibration_y": round(vibration_y, 2),
+                        "vibration_z": round(vibration_z, 2),
+                        "vibration_total_mm_s": round(
+                            math.sqrt(vibration_x**2 + vibration_y**2 + vibration_z**2), 2
+                        ),
                         "quality": "ok",
                         "raw": {},
                         "created_at": now,
@@ -445,8 +468,8 @@ def seed_demo(reset: bool = False) -> bool:
                     "gateway_code": "GW-01",
                     "started_at": cycle,
                     "finished_at": cycle + timedelta(milliseconds=420),
-                    "attempts": 12,
-                    "successes": 12,
+                    "attempts": 18,
+                    "successes": 18,
                     "failures": 0,
                     "duration_ms": 380 + int(random.Random(cycle.isoformat()).random() * 120),
                     "error": None,
@@ -525,6 +548,9 @@ def import_points(path: str) -> dict:
             )
             motor.phase_imbalance_pct = float(
                 item.get("phase_imbalance_pct", motor.phase_imbalance_pct or 10)
+            )
+            motor.vibration_limit_mm_s = float(
+                item.get("vibration_limit_mm_s", motor.vibration_limit_mm_s or 4.5)
             )
             motor.rise_rate_limit_c_per_day = float(
                 item.get("rise_rate_limit_c_per_day", motor.rise_rate_limit_c_per_day or 1)

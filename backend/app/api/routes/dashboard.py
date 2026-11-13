@@ -96,7 +96,7 @@ def dashboard_trend(
         for point in bucket_readings(readings, config["bucket_minutes"]):
             target = aggregated.setdefault(
                 str(point["ts"]),
-                {"temp": [], "avg": [], "a": [], "b": [], "c": []},
+                {"temp": [], "avg": [], "a": [], "b": [], "c": [], "vib": []},
             )
             for key, source in (
                 ("temp", "temperature_c"),
@@ -104,6 +104,7 @@ def dashboard_trend(
                 ("a", "current_a"),
                 ("b", "current_b"),
                 ("c", "current_c"),
+                ("vib", "vibration_total_mm_s"),
             ):
                 value = point[source]
                 if value is not None:
@@ -123,6 +124,9 @@ def dashboard_trend(
                 "current_a": round(sum(values["a"]) / len(values["a"]), 2) if values["a"] else None,
                 "current_b": round(sum(values["b"]) / len(values["b"]), 2) if values["b"] else None,
                 "current_c": round(sum(values["c"]) / len(values["c"]), 2) if values["c"] else None,
+                "vibration_total_mm_s": (
+                    round(sum(values["vib"]) / len(values["vib"]), 3) if values["vib"] else None
+                ),
             }
         )
     return {"motor_code": None, **response_meta, "points": points}
@@ -171,6 +175,13 @@ def overview(
                 "online": is_online(latest, now),
                 "temperature_c": latest.temperature_c if latest else None,
                 "current_avg_a": latest.current_avg_a if latest else None,
+                "current_a": latest.current_a if latest else None,
+                "current_b": latest.current_b if latest else None,
+                "current_c": latest.current_c if latest else None,
+                "vibration_x": latest.vibration_x if latest else None,
+                "vibration_y": latest.vibration_y if latest else None,
+                "vibration_z": latest.vibration_z if latest else None,
+                "vibration_total_mm_s": latest.vibration_total_mm_s if latest else None,
                 "load_pct": load_pct(motor, latest),
                 "temp_deviation_pct": round(temp_dev, 2) if temp_dev is not None else None,
                 "last_seen_at": iso(latest.ts) if latest else None,

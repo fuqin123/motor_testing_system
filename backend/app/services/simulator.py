@@ -16,6 +16,10 @@ class SimulatedValues:
     current_b: float | None = None
     current_c: float | None = None
     current_avg_a: float | None = None
+    vibration_x: float | None = None
+    vibration_y: float | None = None
+    vibration_z: float | None = None
+    vibration_total_mm_s: float | None = None
 
 
 def _code_index(code: str) -> int:
@@ -61,12 +65,20 @@ def simulate_motor(
     phase_a = current_avg * (1 + (rng.random() - 0.5) * 0.012)
     phase_b = current_avg * (1 + (rng.random() - 0.5) * 0.012)
     phase_c = current_avg * (1 + (rng.random() - 0.5) * 0.012)
+    vibration_base = 5.2 if motor_code.endswith("03") else 1.45 + index * 0.06
+    vibration_x = vibration_base * (1 + (rng.random() - 0.5) * 0.12)
+    vibration_y = vibration_base * (1 + (rng.random() - 0.5) * 0.12)
+    vibration_z = vibration_base * (1 + (rng.random() - 0.5) * 0.12)
     return SimulatedValues(
         temperature_c=round(temperature, 2),
         current_a=round(phase_a, 2),
         current_b=round(phase_b, 2),
         current_c=round(phase_c, 2),
         current_avg_a=round((phase_a + phase_b + phase_c) / 3, 2),
+        vibration_x=round(vibration_x, 2),
+        vibration_y=round(vibration_y, 2),
+        vibration_z=round(vibration_z, 2),
+        vibration_total_mm_s=round(math.sqrt(vibration_x**2 + vibration_y**2 + vibration_z**2), 2),
     )
 
 
@@ -87,6 +99,22 @@ def simulate_gateway(plan: GatewayPlan, ts: datetime) -> GatewayReadResult:
                 success=True,
                 values={"temperature_c": values.temperature_c},
                 raw=[int((values.temperature_c or 0) * 10)],
+            )
+            continue
+        if sensor.kind == "vibration":
+            results[sensor.code] = SensorReadResult(
+                sensor_code=sensor.code,
+                success=True,
+                values={
+                    "vibration_x": values.vibration_x,
+                    "vibration_y": values.vibration_y,
+                    "vibration_z": values.vibration_z,
+                    "vibration_total_mm_s": values.vibration_total_mm_s,
+                },
+                raw=[
+                    int((value or 0) * 10)
+                    for value in (values.vibration_x, values.vibration_y, values.vibration_z)
+                ],
             )
             continue
         current = values.current_avg_a

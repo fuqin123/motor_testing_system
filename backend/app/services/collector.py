@@ -124,6 +124,10 @@ def _upsert_reading(
     current_b: float | None,
     current_c: float | None,
     current_avg: float | None,
+    vibration_x: float | None,
+    vibration_y: float | None,
+    vibration_z: float | None,
+    vibration_total: float | None,
     quality: str,
     raw: dict,
 ) -> Reading:
@@ -136,6 +140,10 @@ def _upsert_reading(
     reading.current_b = current_b
     reading.current_c = current_c
     reading.current_avg_a = current_avg
+    reading.vibration_x = vibration_x
+    reading.vibration_y = vibration_y
+    reading.vibration_z = vibration_z
+    reading.vibration_total_mm_s = vibration_total
     reading.quality = quality
     reading.raw = raw
     db.flush()
@@ -194,6 +202,10 @@ def persist_cycle(
                         "current_b": None,
                         "current_c": None,
                         "current_avg": None,
+                        "vibration_x": None,
+                        "vibration_y": None,
+                        "vibration_z": None,
+                        "vibration_total": None,
                         "raw": {},
                     },
                 )
@@ -212,6 +224,14 @@ def persist_cycle(
                             payload["current_b"] = value
                         elif key == "current_c":
                             payload["current_c"] = value
+                        elif key == "vibration_x":
+                            payload["vibration_x"] = value
+                        elif key == "vibration_y":
+                            payload["vibration_y"] = value
+                        elif key == "vibration_z":
+                            payload["vibration_z"] = value
+                        elif key == "vibration_total_mm_s":
+                            payload["vibration_total"] = value
 
             for motor_id, payload in motor_payload.items():
                 motor = db.get(Motor, motor_id)
@@ -232,6 +252,10 @@ def persist_cycle(
                     payload["current_b"],
                     payload["current_c"],
                     payload["current_avg"],
+                    payload["vibration_x"],
+                    payload["vibration_y"],
+                    payload["vibration_z"],
+                    payload["vibration_total"],
                     quality,
                     payload["raw"],
                 )
@@ -251,6 +275,10 @@ def persist_cycle(
                     current_a=payload["current_a"],
                     current_b=payload["current_b"],
                     current_c=payload["current_c"],
+                    vibration_total_mm_s=payload["vibration_total"],
+                    vibration_x=payload["vibration_x"],
+                    vibration_y=payload["vibration_y"],
+                    vibration_z=payload["vibration_z"],
                 )
                 alarms = apply_reading_alarms(db, motor, reading, candidates, config, now=ts)
                 new_alarm_ids.extend(alarm.id for alarm in alarms)

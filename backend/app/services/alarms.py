@@ -37,6 +37,10 @@ def evaluate_rules(
     current_a: float | None = None,
     current_b: float | None = None,
     current_c: float | None = None,
+    vibration_total_mm_s: float | None = None,
+    vibration_x: float | None = None,
+    vibration_y: float | None = None,
+    vibration_z: float | None = None,
 ) -> list[AlarmCandidate]:
     candidates: list[AlarmCandidate] = []
 
@@ -149,6 +153,34 @@ def evaluate_rules(
                         advice="检查三相接线、接触器触点、负载分配与变频器输出平衡。",
                     )
                 )
+
+    if (
+        vibration_total_mm_s is not None
+        and motor.vibration_limit_mm_s > 0
+        and vibration_total_mm_s >= motor.vibration_limit_mm_s
+    ):
+        axis_text = ""
+        if vibration_x is not None and vibration_y is not None and vibration_z is not None:
+            axis_text = (
+                f"（X/Y/Z = {vibration_x:.2f} / {vibration_y:.2f} / {vibration_z:.2f} mm/s）"
+            )
+        candidates.append(
+            AlarmCandidate(
+                level="crit",
+                rule_key="vibration_high",
+                title="振动速度越限",
+                description=(
+                    f"振动速度总值 {vibration_total_mm_s:.2f} mm/s 超过上限 "
+                    f"{motor.vibration_limit_mm_s:.2f} mm/s{axis_text}，"
+                    "可能存在轴承磨损、不平衡或联轴器问题。"
+                ),
+                metric="vibration_total_mm_s",
+                value=vibration_total_mm_s,
+                threshold=motor.vibration_limit_mm_s,
+                unit="mm/s",
+                advice="检查轴承、联轴器、地脚螺栓与转子平衡，建议安排振动复测。",
+            )
+        )
 
     if (
         rise_rate_c_per_day is not None

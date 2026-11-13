@@ -2,6 +2,7 @@
 
 import inspect
 import logging
+import math
 import time
 from dataclasses import dataclass, field
 
@@ -90,6 +91,18 @@ def _parse(sensor: SensorPlan, registers: list[int]) -> dict[str, float]:
         }
         available = [value for value in phases if value is not None]
         values["current_avg_a"] = round(sum(available) / len(available), 3) if available else None
+        return values
+    if sensor.kind == "vibration":
+        axes = [round(value, 3) for value in raw_values]
+        values = {
+            "vibration_x": axes[0] if len(axes) > 0 else None,
+            "vibration_y": axes[1] if len(axes) > 1 else None,
+            "vibration_z": axes[2] if len(axes) > 2 else None,
+        }
+        available = [value for value in axes if value is not None]
+        values["vibration_total_mm_s"] = (
+            round(math.sqrt(sum(value * value for value in available)), 3) if available else None
+        )
         return values
     raise ValueError(f"未知传感器类型: {sensor.kind}")
 

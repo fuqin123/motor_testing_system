@@ -68,6 +68,7 @@ class Motor(TimestampMixin, Base):
     temp_deviation_pct: Mapped[float] = mapped_column(Float, default=8.0)
     current_deviation_pct: Mapped[float] = mapped_column(Float, default=10.0)
     phase_imbalance_pct: Mapped[float] = mapped_column(Float, default=10.0)
+    vibration_limit_mm_s: Mapped[float] = mapped_column(Float, default=4.5)
     rise_rate_limit_c_per_day: Mapped[float] = mapped_column(Float, default=1.0)
     notify_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -125,6 +126,10 @@ class Reading(Base):
     current_b: Mapped[float | None] = mapped_column(Float, nullable=True)
     current_c: Mapped[float | None] = mapped_column(Float, nullable=True)
     current_avg_a: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vibration_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vibration_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vibration_z: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vibration_total_mm_s: Mapped[float | None] = mapped_column(Float, nullable=True)
     quality: Mapped[str] = mapped_column(String(16), default="ok")
     raw: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

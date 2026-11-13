@@ -363,3 +363,184 @@ def test_three_phase_current_high_and_imbalance():
     )
     severe_imbalance = next(item for item in severe if item.rule_key == "current_imbalance")
     assert severe_imbalance.level == "crit"
+
+
+def test_vibration_parse_and_rule():
+    from app.services.modbus import SensorPlan, _parse
+
+    sensor = SensorPlan(
+        id=1,
+        code="V-01",
+        motor_id=1,
+        motor_code="M-01",
+        motor_name="测试电机",
+        gateway_id=1,
+        gateway_code="GW-01",
+        kind="vibration",
+        slave_id=1,
+        register_address=1,
+        register_count=3,
+        scale=0.1,
+        unit="mm/s",
+    )
+    values = _parse(sensor, [15, 20, 25])
+    assert values["vibration_x"] == 1.5
+    assert values["vibration_total_mm_s"] == 3.536
+
+    motor = motor_stub()
+    motor.vibration_limit_mm_s = 4.5
+    candidates = evaluate_rules(
+        motor,
+        None,
+        100.0,
+        None,
+        None,
+        vibration_total_mm_s=5.2,
+        vibration_x=3.0,
+        vibration_y=3.5,
+        vibration_z=2.2,
+    )
+    hit = next(item for item in candidates if item.rule_key == "vibration_high")
+    assert hit.level == "crit"
+    assert hit.threshold == 4.5
+
+
+def test_overview_and_peer_include_vibration(client, db):
+    motor = Motor(
+        code="V-01",
+        name="振动测试电机",
+        group_name="振动测试组",
+        rated_current_a=100,
+        current_limit_a=120,
+        temp_limit_c=85,
+        enabled=True,
+    )
+    db.add(motor)
+    db.flush()
+    now = datetime.now(timezone.utc)
+    db.add(
+        Reading(
+            motor_id=motor.id,
+            ts=now,
+            temperature_c=62.0,
+            current_a=81.0,
+            current_b=82.0,
+            current_c=83.0,
+            current_avg_a=82.0,
+            vibration_x=1.2,
+            vibration_y=2.0,
+            vibration_z=3.3,
+            vibration_total_mm_s=4.05,
+            quality="ok",
+        )
+    )
+    db.commit()
+
+    overview = client.get("/api/v1/dashboard/overview").json()
+    card = next(item for item in overview["motors"] if item["code"] == "V-01")
+    assert card["vibration_total_mm_s"] == 4.05
+    assert card["current_b"] == 82.0
+
+    peers = client.get("/api/v1/analysis/peers", params={"group": "振动测试组"}).json()
+    peer = next(item for item in peers["motors"] if item["code"] == "V-01")
+    assert peer["vibration_total_mm_s"] == 4.05
+    assert peer["vibration_limit_mm_s"] == 4.5
+
+
+def test_feishu_card_buttons_and_callback(db):
+    from app.services.feishu_app import apply_card_action, build_alarm_card
+
+    alarm = Alarm(
+        level="crit",
+        rule_key="vibration_high",
+        title="振动速度越限",
+        motor_code="V-02",
+        motor_name="回调测试电机",
+        value=5.2,
+        threshold=4.5,
+        unit="mm/s",
+        status="open",
+        owner="王工",
+        triggered_at=datetime.now(timezone.utc),
+    )
+    db.add(alarm)
+    db.commit()
+
+    card = build_alarm_card(alarm, "img_test")
+    actions = next(item for item in card["elements"] if item["tag"] == "action")
+    values = {button["value"]["resolution"]: button["value"]["alarm_id"] for button in actions["actions"]}
+    assert values == {"resolved": alarm.id, "unresolved": alarm.id}
+    assert any(item["tag"] == "img" for item in card["elements"])
+
+    message = apply_card_action(alarm.id, "unresolved", "ou_test")
+    db.expire_all()
+    current = db.get(Alarm, alarm.id)
+    assert current.status == "ack"
+    assert "未解决" in message
+
+    message = apply_card_action(alarm.id, "resolved", "ou_test")
+    db.expire_all()
+    current = db.get(Alarm, alarm.id)
+    assert current.status == "closed"
+    assert current.closed_by == "飞书:ou_test"
+    assert current.suppressed_until is not None
+    assert "已解决" in message
+
+
+def test_feishu_long_connection_signature():
+    from app.services.feishu_longconn import FeishuLongConnection
+
+    connection = FeishuLongConnection({"app_id": "cli_test", "app_secret": "secret-a"})
+    assert connection.matches({"app_id": "cli_test", "app_secret": "secret-a"})
+    assert not connection.matches({"app_id": "cli_test", "app_secret": "secret-b"})
+
+
+def test_snapshot_render_png():
+    from app.services.snapshot import render_alarm_snapshot
+
+    motor = Motor(
+        code="M-09",
+        name="快照测试电机",
+        temp_limit_c=85,
+        current_limit_a=252,
+        vibration_limit_mm_s=4.5,
+    )
+    reading = Reading(
+        motor_id=1,
+        ts=datetime.now(timezone.utc),
+        temperature_c=89.2,
+        current_a=231.0,
+        current_b=228.0,
+        current_c=235.0,
+        current_avg_a=231.3,
+        vibration_x=2.1,
+        vibration_y=2.4,
+        vibration_z=3.0,
+        vibration_total_mm_s=4.35,
+        quality="ok",
+    )
+    png = render_alarm_snapshot(motor, reading, [reading], reading.ts)
+    assert png.startswith(b"\x89PNG")
+    assert len(png) > 1000
+
+
+def test_feishu_app_settings_masks_secret(client):
+    response = client.put(
+        "/api/v1/settings/feishu",
+        json={
+            "enabled": False,
+            "app_id": "cli_smoke",
+            "app_secret": "super-secret-value",
+            "chat_id": "oc_smoke",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["secret_set"] is True
+    assert "super-secret-value" not in response.text
+    assert body["enabled"] is False
+
+    fetched = client.get("/api/v1/settings/feishu")
+    assert fetched.status_code == 200
+    assert fetched.json()["app_id"] == "cli_smoke"
+    assert "super-secret-value" not in fetched.text

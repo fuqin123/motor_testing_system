@@ -15,7 +15,11 @@ from app.core.config import settings
 from app.core.time import local_now, utcnow
 from app.db.models import Alarm, NotificationLog
 from app.db.session import SessionLocal
-from app.services.settings import get_notification_config, level_switch_enabled
+from app.services.settings import (
+    get_feishu_app_config,
+    get_notification_config,
+    level_switch_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +260,13 @@ def notify_alarm(alarm_id: int) -> None:
         config = get_notification_config(db)
         group_name = str(config.get("group_name", "设备运维告警群"))
         alarm.notification_to = f"{group_name} · {alarm.owner}"
+        app_config = get_feishu_app_config(db)
+        app_ready = bool(
+            app_config.get("enabled")
+            and app_config.get("app_id")
+            and app_config.get("app_secret")
+            and app_config.get("chat_id")
+        )
         if alarm.notification_status == "skipped":
             _record_result(
                 db,
@@ -286,13 +297,47 @@ def notify_alarm(alarm_id: int) -> None:
             )
             db.commit()
             return
+        if app_ready:
+            from app.services.feishu_app import send_alarm_app
+
+            result = send_alarm_app(alarm, app_config)
+            if result.status != "sent" and settings.feishu_configured:
+                payload = build_alarm_card(alarm, group_name)
+                payload["target"] = alarm.notification_to
+                fallback = _post_card(payload)
+                if fallback.status == "sent":
+                    logger.info("飞书应用发送失败，Webhook 回退成功 alarm=%s", alarm.id)
+                    result.status = fallback.status
+                    result.response_code = fallback.response_code
+                    result.response_body = fallback.response_body
+                    result.attempts += fallback.attempts
+            _record_result(
+                db,
+                alarm,
+                NotificationResult(
+                    status=result.status,
+                    target=alarm.notification_to,
+                    attempts=result.attempts,
+                    response_code=result.response_code,
+                    response_body=result.response_body,
+                ),
+                config,
+            )
+            db.commit()
+            logger.info(
+                "飞书应用通知 alarm=%s status=%s image_key=%s",
+                alarm.id,
+                result.status,
+                result.image_key,
+            )
+            return
         if not settings.feishu_configured:
             _record_result(
                 db,
                 alarm,
                 NotificationResult(status="skipped", target=alarm.notification_to),
                 config,
-                reason="未配置飞书 Webhook",
+                reason="未配置飞书应用机器人或 Webhook",
             )
             db.commit()
             return

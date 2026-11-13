@@ -118,6 +118,10 @@ def motor_card(
         "current_a": latest.current_a if latest else None,
         "current_b": latest.current_b if latest else None,
         "current_c": latest.current_c if latest else None,
+        "vibration_x": latest.vibration_x if latest else None,
+        "vibration_y": latest.vibration_y if latest else None,
+        "vibration_z": latest.vibration_z if latest else None,
+        "vibration_total_mm_s": latest.vibration_total_mm_s if latest else None,
         "load_pct": load_pct(motor, latest),
         "temp_deviation_pct": (
             round(temp_deviation_pct, 2) if temp_deviation_pct is not None else None
@@ -154,7 +158,11 @@ def sensor_dict(sensor: Sensor) -> dict:
         "id": sensor.id,
         "code": sensor.code,
         "kind": sensor.kind,
-        "kind_text": "温度传感器" if sensor.kind == "temperature" else "电流传感器",
+        "kind_text": {
+            "temperature": "温度传感器",
+            "current": "电流传感器",
+            "vibration": "振动传感器",
+        }.get(sensor.kind, sensor.kind),
         "name": sensor.name,
         "motor_code": sensor.motor.code if sensor.motor else None,
         "motor_name": sensor.motor.name if sensor.motor else None,

@@ -182,6 +182,7 @@ def update_thresholds(
         "temp_deviation_pct": motor.temp_deviation_pct,
         "current_deviation_pct": motor.current_deviation_pct,
         "phase_imbalance_pct": motor.phase_imbalance_pct,
+        "vibration_limit_mm_s": motor.vibration_limit_mm_s,
         "rise_rate_limit_c_per_day": motor.rise_rate_limit_c_per_day,
         "notify_enabled": motor.notify_enabled,
         "pilot": motor.pilot,

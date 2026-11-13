@@ -27,6 +27,7 @@ motors:
     temp_limit_c: 85
     current_limit_a: 252
     phase_imbalance_pct: 10
+    vibration_limit_mm_s: 4.5
     sensors:
       - kind: temperature
         gateway: GW-01
@@ -42,6 +43,14 @@ motors:
         register_count: 3
         scale: 0.01
         enabled: true
+      - kind: vibration
+        gateway: GW-01
+        slave_id: 1
+        register_address: 1
+        register_count: 3
+        scale: 0.1
+        unit: mm/s
+        enabled: true
 
   - code: M-02
     name: 2#循环水泵电机
@@ -55,6 +64,7 @@ motors:
     temp_limit_c: 85
     current_limit_a: 252
     phase_imbalance_pct: 10
+    vibration_limit_mm_s: 4.5
     sensors:
       - kind: temperature
         gateway: GW-01
@@ -83,6 +93,7 @@ motors:
     temp_limit_c: 85
     current_limit_a: 305
     phase_imbalance_pct: 10
+    vibration_limit_mm_s: 4.5
     sensors:
       - kind: temperature
         gateway: GW-01

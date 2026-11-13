@@ -37,7 +37,10 @@ def bucket_readings(readings: list[Reading], bucket_minutes: int) -> list[dict]:
         phase_a = [item.current_a for item in items if item.current_a is not None]
         phase_b = [item.current_b for item in items if item.current_b is not None]
         phase_c = [item.current_c for item in items if item.current_c is not None]
-        if not temps and not currents:
+        vibrations = [
+            item.vibration_total_mm_s for item in items if item.vibration_total_mm_s is not None
+        ]
+        if not temps and not currents and not vibrations:
             continue
         points.append(
             {
@@ -47,6 +50,7 @@ def bucket_readings(readings: list[Reading], bucket_minutes: int) -> list[dict]:
                 "current_a": round(mean(phase_a), 2) if phase_a else None,
                 "current_b": round(mean(phase_b), 2) if phase_b else None,
                 "current_c": round(mean(phase_c), 2) if phase_c else None,
+                "vibration_total_mm_s": round(mean(vibrations), 3) if vibrations else None,
             }
         )
     return points
@@ -113,6 +117,8 @@ def motor_summary(motor: Motor) -> dict:
         "rated_current_a": motor.rated_current_a,
         "temp_limit_c": motor.temp_limit_c,
         "current_limit_a": motor.current_limit_a,
+        "phase_imbalance_pct": motor.phase_imbalance_pct,
+        "vibration_limit_mm_s": motor.vibration_limit_mm_s,
         "pilot": motor.pilot,
         "enabled": motor.enabled,
         "node_code": motor.node_code,
@@ -141,6 +147,10 @@ def reading_payload(motor: Motor, reading: Reading | None) -> dict:
         "current_a": reading.current_a,
         "current_b": reading.current_b,
         "current_c": reading.current_c,
+        "vibration_x": reading.vibration_x,
+        "vibration_y": reading.vibration_y,
+        "vibration_z": reading.vibration_z,
+        "vibration_total_mm_s": reading.vibration_total_mm_s,
         "load_pct": load_pct(motor, reading),
         "quality": reading.quality,
         "ts": iso(reading.ts),
@@ -257,6 +267,19 @@ def build_self_analysis(
                 f"当前偏离 {current_dev:+.1f}%" if current_dev is not None else "正常基线样本不足"
             ),
         },
+        {
+            "key": "vibration_high",
+            "label": f"振动总值超过 {motor.vibration_limit_mm_s:.2f} mm/s",
+            "hit": latest is not None
+            and latest.vibration_total_mm_s is not None
+            and latest.vibration_total_mm_s >= motor.vibration_limit_mm_s,
+            "detail": (
+                f"{latest.vibration_total_mm_s:.2f} mm/s / 上限 "
+                f"{motor.vibration_limit_mm_s:.2f} mm/s"
+                if latest and latest.vibration_total_mm_s is not None
+                else "暂无振动读数"
+            ),
+        },
     ]
     verdict = verdict_payload(temp_dev, current_dev, motor)
     return {
@@ -298,6 +321,12 @@ def _motor_metric(
             and latest.current_avg_a >= motor.current_limit_a
         ):
             status = "crit"
+        elif (
+            latest.vibration_total_mm_s is not None
+            and motor.vibration_limit_mm_s > 0
+            and latest.vibration_total_mm_s >= motor.vibration_limit_mm_s
+        ):
+            status = "crit"
         elif temp_dev is not None and temp_dev >= motor.temp_deviation_pct:
             status = "warn"
         elif current_dev is not None and abs(current_dev) >= motor.current_deviation_pct:
@@ -308,6 +337,11 @@ def _motor_metric(
         "status": status,
         "temperature_c": latest.temperature_c if latest else None,
         "current_avg_a": latest.current_avg_a if latest else None,
+        "current_a": latest.current_a if latest else None,
+        "current_b": latest.current_b if latest else None,
+        "current_c": latest.current_c if latest else None,
+        "vibration_total_mm_s": latest.vibration_total_mm_s if latest else None,
+        "vibration_limit_mm_s": motor.vibration_limit_mm_s,
         "load_pct": load_pct(motor, latest),
         "temp_deviation_pct": round(temp_dev, 2) if temp_dev is not None else None,
         "current_deviation_pct": round(current_dev, 2) if current_dev is not None else None,
