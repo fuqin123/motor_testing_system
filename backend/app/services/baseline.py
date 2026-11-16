@@ -88,6 +88,7 @@ def compute_baseline(
             Reading.ts >= since,
             Reading.ts <= now,
             Reading.quality != "error",
+            Reading.operating_state.in_(("running", "unknown")),
         )
     ).all()
 

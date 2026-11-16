@@ -11,6 +11,7 @@ from app.core.time import as_utc, utcnow
 from app.db.models import Alarm, Motor, Reading, Sensor
 from app.services.baseline import Baseline, deviation_pct
 from app.services.settings import choose_owner
+from app.services.telemetry import OPERATING_STATE_TEXT, classify_operating_state
 
 ACTIVE_STATUSES = ("open", "ack")
 
@@ -41,8 +42,28 @@ def evaluate_rules(
     vibration_x: float | None = None,
     vibration_y: float | None = None,
     vibration_z: float | None = None,
+    operating_state: str | None = None,
+    previous_state: str | None = None,
 ) -> list[AlarmCandidate]:
     candidates: list[AlarmCandidate] = []
+    state = operating_state or classify_operating_state(motor, current_avg_a)
+    state_text = OPERATING_STATE_TEXT.get(state, "未知")
+    state_changed = bool(
+        previous_state
+        and previous_state != "unknown"
+        and state != "unknown"
+        and previous_state != state
+    )
+
+    def state_ref(metric: str) -> float | None:
+        value = float(getattr(motor, f"state_{state}_{metric}", 0.0) or 0.0)
+        return value if value > 0 else None
+
+    def ref_or_baseline(metric: str, baseline_value: float | None) -> float | None:
+        ref = state_ref(metric)
+        if ref is not None:
+            return ref
+        return baseline_value if state in ("running", "unknown") else None
 
     if temperature_c is not None:
         if temperature_c >= motor.temp_limit_c:
@@ -62,17 +83,23 @@ def evaluate_rules(
                     advice="优先检查风道散热、轴承润滑与端盖温升，安排红外测温复核。",
                 )
             )
-        elif baseline and baseline.temp_median:
-            temp_dev = deviation_pct(temperature_c, baseline.temp_median)
+        elif not state_changed:
+            temp_ref = ref_or_baseline("temp_c", baseline.temp_median if baseline else None)
+            temp_dev = deviation_pct(temperature_c, temp_ref)
             if temp_dev is not None and temp_dev >= motor.temp_deviation_pct:
+                ref_label = (
+                    f"{state_text}状态正常值"
+                    if state_ref("temp_c") is not None
+                    else "近 30 天正常基线"
+                )
                 candidates.append(
                     AlarmCandidate(
                         level="warn",
                         rule_key="temp_deviation",
-                        title="温度高于自身基线",
+                        title=f"温度高于{state_text}状态基准",
                         description=(
-                            f"外壳温度较 {motor.code} 近 30 天正常基线偏高 {temp_dev:.1f}%，"
-                            f"当前 {temperature_c:.1f}°C，基线 {baseline.temp_median:.1f}°C。"
+                            f"外壳温度较 {motor.code} {ref_label}偏高 {temp_dev:.1f}%，"
+                            f"当前 {temperature_c:.1f}°C，基准 {temp_ref:.1f}°C。"
                         ),
                         metric="temp_deviation_pct",
                         value=temp_dev,
@@ -86,42 +113,52 @@ def evaluate_rules(
     peak_current = max(phases) if phases else current_avg_a
     if peak_current is not None and motor.current_limit_a > 0:
         if peak_current >= motor.current_limit_a:
-            if len(phases) == 3:
-                phase_text = (
-                    f"三相电流 A/B/C = {current_a:.1f} / {current_b:.1f} / {current_c:.1f} A"
+            if not state_changed:
+                if len(phases) == 3:
+                    phase_text = (
+                        f"三相电流 A/B/C = {current_a:.1f} / {current_b:.1f} / {current_c:.1f} A"
+                    )
+                    title = "三相电流越限"
+                else:
+                    phase_text = f"运行电流 {peak_current:.1f} A"
+                    title = "运行电流越限"
+                candidates.append(
+                    AlarmCandidate(
+                        level="crit",
+                        rule_key="current_high",
+                        title=title,
+                        description=(
+                            f"{phase_text}，最高相超过上限 {motor.current_limit_a:.1f} A，"
+                            "可能存在过载或单相电气异常。"
+                        ),
+                        metric="current_phase_max_a" if len(phases) == 3 else "current_avg_a",
+                        value=peak_current,
+                        threshold=motor.current_limit_a,
+                        unit="A",
+                        advice="检查三相负载平衡、接线端子、变频器输出与机械阻力。",
+                    )
                 )
-                title = "三相电流越限"
-            else:
-                phase_text = f"运行电流 {peak_current:.1f} A"
-                title = "运行电流越限"
-            candidates.append(
-                AlarmCandidate(
-                    level="crit",
-                    rule_key="current_high",
-                    title=title,
-                    description=(
-                        f"{phase_text}，最高相超过上限 {motor.current_limit_a:.1f} A，"
-                        "可能存在过载或单相电气异常。"
-                    ),
-                    metric="current_phase_max_a" if len(phases) == 3 else "current_avg_a",
-                    value=peak_current,
-                    threshold=motor.current_limit_a,
-                    unit="A",
-                    advice="检查三相负载平衡、接线端子、变频器输出与机械阻力。",
-                )
+        elif not state_changed and current_avg_a is not None:
+            current_ref = ref_or_baseline(
+                "current_a", baseline.current_median if baseline else None
             )
-        elif baseline and baseline.current_median and current_avg_a is not None:
-            current_dev = deviation_pct(current_avg_a, baseline.current_median)
+            current_dev = deviation_pct(current_avg_a, current_ref)
             if current_dev is not None and abs(current_dev) >= motor.current_deviation_pct:
                 direction = "偏高" if current_dev > 0 else "偏低"
+                ref_label = (
+                    f"{state_text}状态正常值"
+                    if state_ref("current_a") is not None
+                    else "近 30 天正常基线"
+                )
                 candidates.append(
                     AlarmCandidate(
                         level="warn",
                         rule_key="current_deviation",
-                        title="电流偏离自身基线",
+                        title=f"电流偏离{state_text}状态基准",
                         description=(
-                            f"运行电流较正常基线{direction} {abs(current_dev):.1f}%，"
-                            f"当前 {current_avg_a:.1f} A，基线 {baseline.current_median:.1f} A。"
+                            f"运行电流较 {motor.code} {ref_label}{direction} "
+                            f"{abs(current_dev):.1f}%，当前 {current_avg_a:.1f} A，"
+                            f"基准 {current_ref:.1f} A。"
                         ),
                         metric="current_deviation_pct",
                         value=current_dev,
@@ -131,7 +168,12 @@ def evaluate_rules(
                     )
                 )
 
-    if len(phases) == 3 and motor.phase_imbalance_pct > 0:
+    if (
+        len(phases) == 3
+        and motor.phase_imbalance_pct > 0
+        and state == "running"
+        and not state_changed
+    ):
         phase_mean = sum(phases) / 3
         if phase_mean > 0:
             imbalance = (max(phases) - min(phases)) / phase_mean * 100
@@ -158,6 +200,7 @@ def evaluate_rules(
         vibration_total_mm_s is not None
         and motor.vibration_limit_mm_s > 0
         and vibration_total_mm_s >= motor.vibration_limit_mm_s
+        and not state_changed
     ):
         axis_text = ""
         if vibration_x is not None and vibration_y is not None and vibration_z is not None:
@@ -182,10 +225,33 @@ def evaluate_rules(
             )
         )
 
+    vibe_ref = state_ref("vibration_mm_s")
+    if vibration_total_mm_s is not None and vibe_ref is not None and not state_changed:
+        vibe_dev = deviation_pct(vibration_total_mm_s, vibe_ref)
+        if vibe_dev is not None and vibe_dev >= motor.vibration_deviation_pct:
+            candidates.append(
+                AlarmCandidate(
+                    level="warn",
+                    rule_key="vibration_deviation",
+                    title=f"振动高于{state_text}状态基准",
+                    description=(
+                        f"振动速度总值 {vibration_total_mm_s:.2f} mm/s，较 {motor.code} "
+                        f"{state_text}状态正常值 {vibe_ref:.2f} mm/s 偏高 {vibe_dev:.1f}%。"
+                    ),
+                    metric="vibration_deviation_pct",
+                    value=vibe_dev,
+                    threshold=motor.vibration_deviation_pct,
+                    unit="%",
+                    advice="结合运行状态复核轴承、联轴器与转子平衡，排除状态切换瞬间波动。",
+                )
+            )
+
     if (
         rise_rate_c_per_day is not None
         and rise_rate_c_per_day >= motor.rise_rate_limit_c_per_day
         and motor.rise_rate_limit_c_per_day > 0
+        and state == "running"
+        and not state_changed
     ):
         candidates.append(
             AlarmCandidate(

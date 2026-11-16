@@ -23,7 +23,7 @@ from app.services.feishu import notify_alarm
 from app.services.modbus import GatewayPlan, GatewayReadResult, SensorPlan, read_gateway
 from app.services.settings import get_notification_config
 from app.services.simulator import simulate_gateway
-from app.services.telemetry import latest_readings, series_readings
+from app.services.telemetry import classify_operating_state, latest_readings, series_readings
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,7 @@ def _upsert_reading(
     vibration_y: float | None,
     vibration_z: float | None,
     vibration_total: float | None,
+    operating_state: str,
     quality: str,
     raw: dict,
 ) -> Reading:
@@ -144,6 +145,7 @@ def _upsert_reading(
     reading.vibration_y = vibration_y
     reading.vibration_z = vibration_z
     reading.vibration_total_mm_s = vibration_total
+    reading.operating_state = operating_state
     reading.quality = quality
     reading.raw = raw
     db.flush()
@@ -243,6 +245,16 @@ def persist_cycle(
                     quality = "partial"
                 else:
                     quality = "error"
+                previous = db.scalar(
+                    select(Reading)
+                    .where(Reading.motor_id == motor.id, Reading.ts < ts)
+                    .order_by(Reading.ts.desc())
+                    .limit(1)
+                )
+                previous_state = previous.operating_state if previous else None
+                operating_state = classify_operating_state(motor, payload["current_avg"])
+                if operating_state == "unknown" and previous_state:
+                    operating_state = previous_state
                 reading = _upsert_reading(
                     db,
                     motor,
@@ -256,6 +268,7 @@ def persist_cycle(
                     payload["vibration_y"],
                     payload["vibration_z"],
                     payload["vibration_total"],
+                    operating_state,
                     quality,
                     payload["raw"],
                 )
@@ -279,6 +292,8 @@ def persist_cycle(
                     vibration_x=payload["vibration_x"],
                     vibration_y=payload["vibration_y"],
                     vibration_z=payload["vibration_z"],
+                    operating_state=operating_state,
+                    previous_state=previous_state,
                 )
                 alarms = apply_reading_alarms(db, motor, reading, candidates, config, now=ts)
                 new_alarm_ids.extend(alarm.id for alarm in alarms)

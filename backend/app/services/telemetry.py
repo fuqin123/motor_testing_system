@@ -10,6 +10,25 @@ from app.core.time import as_utc, utcnow
 from app.db.models import Alarm, Gateway, Motor, PollCycle, Reading, Sensor
 
 ONLINE_TOLERANCE_CYCLES = 2
+OPERATING_STATE_TEXT = {
+    "running": "工作",
+    "standby": "待机",
+    "off": "关机",
+    "unknown": "未知",
+}
+
+
+def classify_operating_state(motor: Motor, current_avg_a: float | None) -> str:
+    """按电流落在关机/待机/工作区间判定运行状态。"""
+    if current_avg_a is None:
+        return "unknown"
+    off_max = max(0.0, float(getattr(motor, "off_current_max_a", 0.5) or 0.0))
+    running_min = max(0.0, float(getattr(motor, "running_current_min_a", 0.0) or 0.0))
+    if current_avg_a <= off_max:
+        return "off"
+    if running_min > off_max and current_avg_a < running_min:
+        return "standby"
+    return "running"
 
 
 def latest_readings(

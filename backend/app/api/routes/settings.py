@@ -15,6 +15,7 @@ from app.services.acceptance import acceptance_snapshot
 from app.services.feishu import send_test_message
 from app.services.feishu_app import send_test_app
 from app.services.feishu_longconn import connection_status, ensure_connection
+from app.services.telemetry import latest_readings
 from app.services.settings import (
     get_feishu_app_config,
     get_notification_config,
@@ -39,6 +40,7 @@ def get_settings(
     user: UserContext = Depends(get_current_user),
 ) -> dict:
     motors = list(db.scalars(select(Motor).order_by(Motor.code)).all())
+    latest_map = latest_readings(db, [motor.id for motor in motors])
     notification = get_notification_config(db)
     app_config = get_feishu_app_config(db)
     app_public = public_feishu_app_config(app_config)
@@ -56,8 +58,25 @@ def get_settings(
                 "current_deviation_pct": motor.current_deviation_pct,
                 "phase_imbalance_pct": motor.phase_imbalance_pct,
                 "vibration_limit_mm_s": motor.vibration_limit_mm_s,
+                "vibration_deviation_pct": motor.vibration_deviation_pct,
                 "rise_rate_limit_c_per_day": motor.rise_rate_limit_c_per_day,
                 "notify_enabled": motor.notify_enabled,
+                "off_current_max_a": motor.off_current_max_a,
+                "running_current_min_a": motor.running_current_min_a,
+                "state_running_current_a": motor.state_running_current_a,
+                "state_running_temp_c": motor.state_running_temp_c,
+                "state_running_vibration_mm_s": motor.state_running_vibration_mm_s,
+                "state_standby_current_a": motor.state_standby_current_a,
+                "state_standby_temp_c": motor.state_standby_temp_c,
+                "state_standby_vibration_mm_s": motor.state_standby_vibration_mm_s,
+                "state_off_current_a": motor.state_off_current_a,
+                "state_off_temp_c": motor.state_off_temp_c,
+                "state_off_vibration_mm_s": motor.state_off_vibration_mm_s,
+                "operating_state": (
+                    latest_map[motor.id].operating_state
+                    if motor.id in latest_map
+                    else "unknown"
+                ),
             }
             for motor in motors
         ],

@@ -19,9 +19,21 @@ class ThresholdUpdate(BaseModel):
     current_deviation_pct: float | None = Field(default=None, ge=0, le=100)
     phase_imbalance_pct: float | None = Field(default=None, ge=0, le=100)
     vibration_limit_mm_s: float | None = Field(default=None, ge=0, le=100)
+    vibration_deviation_pct: float | None = Field(default=None, ge=0, le=100)
     rise_rate_limit_c_per_day: float | None = Field(default=None, ge=0, le=50)
     notify_enabled: bool | None = None
     pilot: bool | None = None
+    off_current_max_a: float | None = Field(default=None, ge=0, le=20000)
+    running_current_min_a: float | None = Field(default=None, ge=0, le=20000)
+    state_running_current_a: float | None = Field(default=None, ge=0, le=20000)
+    state_running_temp_c: float | None = Field(default=None, ge=-50, le=300)
+    state_running_vibration_mm_s: float | None = Field(default=None, ge=0, le=200)
+    state_standby_current_a: float | None = Field(default=None, ge=0, le=20000)
+    state_standby_temp_c: float | None = Field(default=None, ge=-50, le=300)
+    state_standby_vibration_mm_s: float | None = Field(default=None, ge=0, le=200)
+    state_off_current_a: float | None = Field(default=None, ge=0, le=20000)
+    state_off_temp_c: float | None = Field(default=None, ge=-50, le=300)
+    state_off_vibration_mm_s: float | None = Field(default=None, ge=0, le=200)
 
 
 class NotificationSettingsUpdate(BaseModel):

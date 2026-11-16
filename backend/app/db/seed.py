@@ -294,6 +294,7 @@ def seed_demo(reset: bool = False) -> bool:
                         "vibration_total_mm_s": round(
                             math.sqrt(vibration_x**2 + vibration_y**2 + vibration_z**2), 2
                         ),
+                        "operating_state": "running",
                         "quality": "ok",
                         "raw": {},
                         "created_at": now,
@@ -552,6 +553,19 @@ def import_points(path: str) -> dict:
             motor.vibration_limit_mm_s = float(
                 item.get("vibration_limit_mm_s", motor.vibration_limit_mm_s or 4.5)
             )
+            motor.vibration_deviation_pct = float(
+                item.get("vibration_deviation_pct", motor.vibration_deviation_pct or 30)
+            )
+            motor.off_current_max_a = float(
+                item.get("off_current_max_a", motor.off_current_max_a or 0.5)
+            )
+            motor.running_current_min_a = float(
+                item.get("running_current_min_a", motor.running_current_min_a or 0)
+            )
+            for state in ("running", "standby", "off"):
+                for metric in ("current_a", "temp_c", "vibration_mm_s"):
+                    field = f"state_{state}_{metric}"
+                    setattr(motor, field, float(item.get(field, getattr(motor, field) or 0)))
             motor.rise_rate_limit_c_per_day = float(
                 item.get("rise_rate_limit_c_per_day", motor.rise_rate_limit_c_per_day or 1)
             )
@@ -561,8 +575,10 @@ def import_points(path: str) -> dict:
 
             for sensor_item in item.get("sensors") or []:
                 kind = str(sensor_item.get("kind", "")).strip()
-                if kind not in ("temperature", "current"):
-                    raise ValueError(f"{code} 的传感器 kind 必须为 temperature 或 current")
+                if kind not in ("temperature", "current", "vibration"):
+                    raise ValueError(
+                        f"{code} 的传感器 kind 必须为 temperature、current 或 vibration"
+                    )
                 gateway_code = str(sensor_item.get("gateway", "")).strip()
                 gateway = gateway_map.get(gateway_code)
                 if gateway is None:
@@ -580,20 +596,27 @@ def import_points(path: str) -> dict:
                     db.add(sensor)
                 sensor.code = _sensor_code(code, kind)
                 sensor.gateway_id = gateway.id
-                sensor.name = sensor_item.get(
-                    "name", "外壳温度" if kind == "temperature" else "三相电流"
-                )
+                default_name = {
+                    "temperature": "外壳温度",
+                    "current": "三相电流",
+                    "vibration": "振动速度",
+                }[kind]
+                sensor.name = sensor_item.get("name", default_name)
                 sensor.slave_id = int(sensor_item.get("slave_id", sensor.slave_id or 1))
+                default_address = 1 if kind == "vibration" else 0
                 sensor.register_address = int(
-                    sensor_item.get("register_address", sensor.register_address or 0)
+                    sensor_item.get(
+                        "register_address", sensor.register_address or default_address
+                    )
                 )
                 default_count = 1 if kind == "temperature" else 3
                 sensor.register_count = int(
                     sensor_item.get("register_count", sensor.register_count or default_count)
                 )
-                default_scale = 0.1 if kind == "temperature" else 0.01
+                default_scale = 0.01 if kind == "current" else 0.1
                 sensor.scale = float(sensor_item.get("scale", sensor.scale or default_scale))
-                sensor.unit = str(sensor_item.get("unit", "℃" if kind == "temperature" else "A"))
+                default_unit = {"temperature": "℃", "current": "A", "vibration": "mm/s"}[kind]
+                sensor.unit = str(sensor_item.get("unit", default_unit))
                 sensor.enabled = bool(sensor_item.get("enabled", True))
                 sensor.power_type = str(sensor_item.get("power_type", "市电供电"))
                 sensor.firmware = str(sensor_item.get("firmware", "—"))

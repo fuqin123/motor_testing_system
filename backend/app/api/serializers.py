@@ -122,6 +122,7 @@ def motor_card(
         "vibration_y": latest.vibration_y if latest else None,
         "vibration_z": latest.vibration_z if latest else None,
         "vibration_total_mm_s": latest.vibration_total_mm_s if latest else None,
+        "operating_state": latest.operating_state if latest else "unknown",
         "load_pct": load_pct(motor, latest),
         "temp_deviation_pct": (
             round(temp_deviation_pct, 2) if temp_deviation_pct is not None else None

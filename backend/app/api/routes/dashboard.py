@@ -182,6 +182,7 @@ def overview(
                 "vibration_y": latest.vibration_y if latest else None,
                 "vibration_z": latest.vibration_z if latest else None,
                 "vibration_total_mm_s": latest.vibration_total_mm_s if latest else None,
+                "operating_state": latest.operating_state if latest else "unknown",
                 "load_pct": load_pct(motor, latest),
                 "temp_deviation_pct": round(temp_dev, 2) if temp_dev is not None else None,
                 "last_seen_at": iso(latest.ts) if latest else None,

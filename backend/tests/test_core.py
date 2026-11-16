@@ -544,3 +544,121 @@ def test_feishu_app_settings_masks_secret(client):
     assert fetched.status_code == 200
     assert fetched.json()["app_id"] == "cli_smoke"
     assert "super-secret-value" not in fetched.text
+
+
+def test_operating_state_classification_and_transition_suppression():
+    from app.services.alarms import evaluate_rules
+    from app.services.telemetry import classify_operating_state
+
+    motor = motor_stub()
+    motor.current_limit_a = 100.0
+    motor.off_current_max_a = 1.0
+    motor.running_current_min_a = 30.0
+    motor.state_running_current_a = 50.0
+    motor.state_standby_current_a = 5.0
+    motor.state_running_temp_c = 60.0
+    motor.state_standby_temp_c = 30.0
+    motor.vibration_deviation_pct = 30.0
+    motor.phase_imbalance_pct = 10.0
+
+    assert classify_operating_state(motor, 0.8) == "off"
+    assert classify_operating_state(motor, 5.0) == "standby"
+    assert classify_operating_state(motor, 80.0) == "running"
+
+    baseline = baseline_stub()
+    transition = evaluate_rules(
+        motor,
+        60.0,
+        120.0,
+        baseline,
+        None,
+        current_a=120.0,
+        current_b=119.0,
+        current_c=118.0,
+        operating_state="running",
+        previous_state="off",
+    )
+    assert "current_high" not in {item.rule_key for item in transition}
+    assert "current_deviation" not in {item.rule_key for item in transition}
+
+    standby = evaluate_rules(
+        motor,
+        60.0,
+        8.0,
+        baseline,
+        None,
+        operating_state="standby",
+        previous_state="standby",
+    )
+    assert "current_deviation" in {item.rule_key for item in standby}
+    deviation = next(item for item in standby if item.rule_key == "current_deviation")
+    assert "待机" in deviation.title
+
+    normal = evaluate_rules(
+        motor,
+        32.0,
+        5.0,
+        baseline,
+        None,
+        operating_state="standby",
+        previous_state="standby",
+    )
+    assert "current_deviation" not in {item.rule_key for item in normal}
+
+
+def test_feishu_long_connection_hot_reload(monkeypatch):
+    import asyncio
+    import time
+
+    import app.services.feishu_longconn as longconn
+
+    class FakeClient:
+        instances = []
+
+        def __init__(self, app_id, app_secret, event_handler=None, log_level=None):
+            self.app_id = app_id
+            self.stopped = False
+            FakeClient.instances.append(self)
+
+        def start(self):
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(asyncio.sleep(3600))
+
+        async def _disconnect(self):
+            self.stopped = True
+
+    monkeypatch.setattr(longconn.lark.ws, "Client", FakeClient)
+    if longconn._connection is not None:
+        longconn._connection.stop()
+        longconn._connection = None
+    first_config = {
+        "enabled": True,
+        "app_id": "cli_a",
+        "app_secret": "secret_a",
+        "chat_id": "oc_a",
+    }
+    second_config = {**first_config, "app_id": "cli_b", "app_secret": "secret_b"}
+    try:
+        first = longconn.ensure_connection(first_config)
+        assert first["app_id"] == "cli_a"
+        deadline = time.time() + 3
+        while len(FakeClient.instances) < 1 and time.time() < deadline:
+            time.sleep(0.01)
+        assert len(FakeClient.instances) == 1
+        second = longconn.ensure_connection(second_config)
+        assert second["app_id"] == "cli_b"
+        assert second["restart_required"] is False
+        assert FakeClient.instances[0].stopped is True
+        deadline = time.time() + 3
+        while len(FakeClient.instances) < 2 and time.time() < deadline:
+            time.sleep(0.01)
+        assert len(FakeClient.instances) == 2
+        assert FakeClient.instances[1].stopped is False
+
+        disabled = longconn.ensure_connection({**second_config, "enabled": False})
+        assert disabled["running"] is False
+        assert FakeClient.instances[1].stopped is True
+    finally:
+        if longconn._connection is not None:
+            longconn._connection.stop()
+        longconn._connection = None

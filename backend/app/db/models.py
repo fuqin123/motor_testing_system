@@ -69,8 +69,21 @@ class Motor(TimestampMixin, Base):
     current_deviation_pct: Mapped[float] = mapped_column(Float, default=10.0)
     phase_imbalance_pct: Mapped[float] = mapped_column(Float, default=10.0)
     vibration_limit_mm_s: Mapped[float] = mapped_column(Float, default=4.5)
+    vibration_deviation_pct: Mapped[float] = mapped_column(Float, default=30.0)
     rise_rate_limit_c_per_day: Mapped[float] = mapped_column(Float, default=1.0)
     notify_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    off_current_max_a: Mapped[float] = mapped_column(Float, default=0.5)
+    running_current_min_a: Mapped[float] = mapped_column(Float, default=0.0)
+    state_running_current_a: Mapped[float] = mapped_column(Float, default=0.0)
+    state_running_temp_c: Mapped[float] = mapped_column(Float, default=0.0)
+    state_running_vibration_mm_s: Mapped[float] = mapped_column(Float, default=0.0)
+    state_standby_current_a: Mapped[float] = mapped_column(Float, default=0.0)
+    state_standby_temp_c: Mapped[float] = mapped_column(Float, default=0.0)
+    state_standby_vibration_mm_s: Mapped[float] = mapped_column(Float, default=0.0)
+    state_off_current_a: Mapped[float] = mapped_column(Float, default=0.0)
+    state_off_temp_c: Mapped[float] = mapped_column(Float, default=0.0)
+    state_off_vibration_mm_s: Mapped[float] = mapped_column(Float, default=0.0)
 
     sensors: Mapped[list["Sensor"]] = relationship(
         back_populates="motor", cascade="all, delete-orphan"
@@ -130,6 +143,7 @@ class Reading(Base):
     vibration_y: Mapped[float | None] = mapped_column(Float, nullable=True)
     vibration_z: Mapped[float | None] = mapped_column(Float, nullable=True)
     vibration_total_mm_s: Mapped[float | None] = mapped_column(Float, nullable=True)
+    operating_state: Mapped[str] = mapped_column(String(16), default="unknown")
     quality: Mapped[str] = mapped_column(String(16), default="ok")
     raw: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
