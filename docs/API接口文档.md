@@ -1,6 +1,6 @@
 # API 接口文档
 
-> 版本：v0.4.0 · 2026-11-13
+> 版本：v0.5.0 · 2026-11-16
 > Base URL：`http://<host>:8000/api/v1`
 > 在线文档：`/api/docs`（Swagger UI）· `/api/redoc` · `/api/openapi.json`
 
@@ -22,6 +22,7 @@
 - 时间：ISO 8601 UTC，例如 `"2026-11-12T06:30:00Z"`；前端本地化为北京时间。
 - **日期回看**：总览、趋势、分析、电机详情/序列支持 `date=YYYY-MM-DD`（Asia/Shanghai）；省略表示今天/实时，历史日期以所选日结束时刻为 `as_of`，只使用该时刻之前的数据。
 - 数值单位：温度 `°C`，电流 `A`，振动 `mm/s`，偏离 `%`，温升 `°C/天`。
+- 运行状态：`running` 工作、`standby` 待机、`off` 关机、`unknown` 未知；由电流和电机状态阈值判定。
 - 错误格式：
 
 ```json
@@ -207,6 +208,7 @@
       "vibration_y": 2.5,
       "vibration_z": 2.1,
       "vibration_total_mm_s": 4.05,
+      "operating_state": "running",
       "load_pct": 67.6,
       "temp_deviation_pct": 19.0,
       "last_seen_at": "2026-11-12T06:30:00Z",
@@ -307,6 +309,7 @@
       "vibration_y": 2.3,
       "vibration_z": 2.0,
       "vibration_total_mm_s": 3.72,
+      "operating_state": "running",
       "load_pct": 74.2,
       "temp_deviation_pct": 5.3,
       "spark_temp": [60.8, 61.1],
@@ -355,7 +358,7 @@
 
 ### 4.4 修改阈值
 
-> `current_limit_a` 在三相电流场景下表示**单相电流上限**；`phase_imbalance_pct` 为三相不平衡阈值（默认 10%）；`vibration_limit_mm_s` 为总振动上限（默认 4.5 mm/s）。
+> `current_limit_a` 在三相电流场景下表示**单相电流上限**；`phase_imbalance_pct` 为三相不平衡阈值（默认 10%）；`vibration_limit_mm_s` 为总振动上限（默认 4.5 mm/s）；`vibration_deviation_pct` 为振动偏离当前状态正常值的告警阈值（默认 30%）。状态判定与正常值字段见 4.4.1。
 
 `PATCH /motors/{code}/thresholds`
 
@@ -369,9 +372,21 @@
   "current_deviation_pct": 10,
   "phase_imbalance_pct": 10,
   "vibration_limit_mm_s": 4.5,
+  "vibration_deviation_pct": 30,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true,
-  "pilot": true
+  "pilot": true,
+  "off_current_max_a": 1.0,
+  "running_current_min_a": 30.0,
+  "state_running_current_a": 170.0,
+  "state_running_temp_c": 60.0,
+  "state_running_vibration_mm_s": 2.5,
+  "state_standby_current_a": 3.0,
+  "state_standby_temp_c": 32.0,
+  "state_standby_vibration_mm_s": 0.5,
+  "state_off_current_a": 0.0,
+  "state_off_temp_c": 25.0,
+  "state_off_vibration_mm_s": 0.0
 }
 ```
 
@@ -386,13 +401,33 @@
   "current_deviation_pct": 10.0,
   "phase_imbalance_pct": 10.0,
   "vibration_limit_mm_s": 4.5,
+  "vibration_deviation_pct": 30.0,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true,
-  "pilot": true
+  "pilot": true,
+  "off_current_max_a": 0.5,
+  "running_current_min_a": 0.0,
+  "state_running_current_a": 0.0,
+  "state_running_temp_c": 0.0,
+  "state_running_vibration_mm_s": 0.0,
+  "state_standby_current_a": 0.0,
+  "state_standby_temp_c": 0.0,
+  "state_standby_vibration_mm_s": 0.0,
+  "state_off_current_a": 0.0,
+  "state_off_temp_c": 0.0,
+  "state_off_vibration_mm_s": 0.0
 }
 ```
 
 写入 `audit_logs`。
+
+#### 4.4.1 状态化字段
+
+- `off_current_max_a`：电流 ≤ 此值判为关机。
+- `running_current_min_a`：电流 ≥ 此值判为工作；介于关机上限与工作下限之间为待机。工作下限为 0 时不启用待机区间。
+- `state_running_current_a` / `state_running_temp_c` / `state_running_vibration_mm_s`：工作状态正常值。
+- `state_standby_*`、`state_off_*`：待机、关机状态正常值。
+- 正常值留 0 表示该状态不使用该项；待机/关机不会回退到工作基线。状态切换当次不触发偏离、温升、电流不平衡、电流/振动越限，温度硬上限仍生效。
 
 ### 4.5 新增/更新电机
 
@@ -420,6 +455,7 @@
   "current_deviation_pct": 10,
   "phase_imbalance_pct": 10,
   "vibration_limit_mm_s": 4.5,
+  "vibration_deviation_pct": 30,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true
 }
@@ -446,7 +482,7 @@
   "series": [ { "ts": "2026-10-13T00:00:00Z", "temperature_c": 72.1, "current_avg_a": 186.2 } ],
   "band": [ { "ts": "2026-10-13T00:00:00Z", "lo": 69.9, "hi": 76.0 } ],
   "baseline": { "temp_median": 73.53, "temp_p10": 69.87, "temp_p90": 78.91, "current_median": 188.49, "current_p10": 179.68, "current_p90": 197.19, "sample_count": 2880 },
-  "latest": { "temperature_c": 87.4, "current_avg_a": 196.29, "current_a": 196.0, "current_b": 196.4, "current_c": 195.9, "vibration_x": 2.3, "vibration_y": 2.5, "vibration_z": 2.1, "vibration_total_mm_s": 4.05, "load_pct": 67.7, "ts": "2026-11-12T06:00:00Z" },
+  "latest": { "temperature_c": 87.4, "current_avg_a": 196.29, "current_a": 196.0, "current_b": 196.4, "current_c": 195.9, "vibration_x": 2.3, "vibration_y": 2.5, "vibration_z": 2.1, "vibration_total_mm_s": 4.05, "operating_state": "running", "load_pct": 67.7, "ts": "2026-11-12T06:00:00Z" },
   "deviation": { "temp_pct": 18.86, "current_pct": 4.14 },
   "rise_rate_c_per_day": 1.923,
   "rules": [
@@ -809,8 +845,21 @@
       "current_deviation_pct": 10,
       "phase_imbalance_pct": 10,
       "vibration_limit_mm_s": 4.5,
+      "vibration_deviation_pct": 30,
       "rise_rate_limit_c_per_day": 1.0,
-      "notify_enabled": true
+      "notify_enabled": true,
+      "off_current_max_a": 1.0,
+      "running_current_min_a": 30.0,
+      "state_running_current_a": 170.0,
+      "state_running_temp_c": 60.0,
+      "state_running_vibration_mm_s": 2.5,
+      "state_standby_current_a": 3.0,
+      "state_standby_temp_c": 32.0,
+      "state_standby_vibration_mm_s": 0.5,
+      "state_off_current_a": 0.0,
+      "state_off_temp_c": 25.0,
+      "state_off_vibration_mm_s": 0.0,
+      "operating_state": "running"
     }
   ],
   "notifications": {
@@ -898,7 +947,7 @@
 ```
 
 - App Secret 永不返回，只返回 `secret_set`。
-- `restart_required=true` 表示 App ID/Secret 已变更或应用已停用，需要重启 backend 重建长连接。
+- 保存应用配置或停用后，后端会自动断开旧连接并按新配置重建；`restart_required=true` 仅在旧连接无法停止时出现，需要重启 backend。
 
 ### 8.5 保存飞书应用配置
 
@@ -915,7 +964,7 @@
 }
 ```
 
-响应同 8.4，并触发长连接启动/状态检查。写入 `audit_logs`。
+响应同 8.4；保存后自动停止旧长连接并按新凭据重建，无需重启 backend。写入 `audit_logs`。
 
 ### 8.6 飞书应用测试
 
