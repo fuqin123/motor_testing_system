@@ -83,7 +83,7 @@ onBeforeUnmount(() => {
         <span class="num">{{ clock }}</span>
         <span style="color: var(--faint)">采集周期 {{ app.intervalMinutes }} 分钟</span>
       </div>
-      <div class="pill hide-m" :title="feishuReady ? '飞书机器人已配置' : '未配置飞书 Webhook'">
+      <div class="pill hide-m" :title="feishuReady ? '飞书机器人已配置' : '未配置飞书通知'">
         <span
           class="dot"
           :style="{

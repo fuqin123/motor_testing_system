@@ -191,7 +191,21 @@ export interface ThresholdResponse {
   current_limit_a: number
   temp_deviation_pct: number
   current_deviation_pct: number
+  phase_imbalance_pct: number
+  vibration_limit_mm_s: number
+  vibration_deviation_pct: number
   rise_rate_limit_c_per_day: number
   notify_enabled: boolean
   pilot: boolean
+  off_current_max_a: number
+  running_current_min_a: number
+  state_running_current_a: number
+  state_running_temp_c: number
+  state_running_vibration_mm_s: number
+  state_standby_current_a: number
+  state_standby_temp_c: number
+  state_standby_vibration_mm_s: number
+  state_off_current_a: number
+  state_off_temp_c: number
+  state_off_vibration_mm_s: number
 }

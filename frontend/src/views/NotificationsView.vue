@@ -48,7 +48,7 @@ async function load() {
 
 async function saveApp() {
   if (appForm.value.enabled && !appReady.value) {
-    ui.notify('warn', '飞书应用凭据不完整', '启用前请填写 App ID、App Secret 和 Chat ID')
+    ui.notify('warn', '飞书应用凭据不完整', '启用前请填写应用 ID、应用密钥和群聊 ID')
     return
   }
   saving.value = true
@@ -62,9 +62,9 @@ async function saveApp() {
     appSettings.value = updated
     appForm.value.app_secret = ''
     if (updated.long_connection.restart_required) {
-      ui.notify('warn', '应用配置已保存', 'App ID 已变更，请重启 backend 以重建长连接')
+      ui.notify('warn', '应用配置已保存', '旧长连接未能停止，请重启后端服务')
     } else {
-      ui.notify('ok', '飞书应用配置已保存', '长连接会自动尝试启动')
+      ui.notify('ok', '飞书应用配置已保存', '长连接已按新配置自动重建')
     }
   } catch (error) {
     ui.notify('err', '保存失败', error instanceof Error ? error.message : '')
@@ -141,8 +141,8 @@ onMounted(() => void load())
       <div>
         <h2>飞书通知机器人</h2>
         <p>
-          绑定企业自建应用后，平台会把异常电机快照上传到飞书，并发送带“已解决 / 未解决”按钮的富文本卡片；
-          长连接订阅卡片回传，责任人点击按钮即可完成告警闭环。
+          绑定企业自建应用后，平台会把异常电机监测快照上传到飞书，并发送带“已解决 / 未解决”按钮的富文本卡片；
+          长连接订阅卡片按钮回调，责任人点击按钮即可完成告警闭环。
         </p>
       </div>
       <div class="config-intro-actions">
@@ -159,36 +159,36 @@ onMounted(() => void load())
             <div class="right">
               <StateBadge :tone="appForm.enabled ? 'ok' : 'mut'" :label="appForm.enabled ? '已启用' : '未启用'" />
             </div>
-            <div class="sub">在飞书开放平台创建企业自建应用，开启机器人能力，并添加 im:message、im:resource 权限</div>
+            <div class="sub">在飞书开放平台创建企业自建应用，开启机器人能力，并添加消息发送、图片上传、群信息读取权限</div>
           </div>
           <div class="set-row">
-            <span class="k">App ID</span>
+            <span class="k">应用 ID</span>
             <div class="grow"><input v-model="appForm.app_id" class="input" placeholder="cli_xxxxxxxxxxxxxxxx" /></div>
           </div>
           <div class="set-row">
-            <span class="k">App Secret</span>
+            <span class="k">应用密钥</span>
             <div class="grow">
               <input
                 v-model="appForm.app_secret"
                 class="input"
                 type="password"
                 autocomplete="new-password"
-                :placeholder="appSettings.secret_set ? '已保存，留空保持不变' : '请输入 App Secret'"
+                :placeholder="appSettings.secret_set ? '已保存，留空保持不变' : '请输入应用密钥'"
               />
             </div>
           </div>
           <div class="set-row">
-            <span class="k">Chat ID</span>
+            <span class="k">群聊 ID</span>
             <div class="grow">
               <input v-model="appForm.chat_id" class="input" placeholder="oc_xxxxxxxxxxxxxxxx" />
-              <span class="hint">飞书群设置中获取，机器人需先加入该群</span>
+              <span class="hint">在飞书群设置中获取，机器人需先加入该群</span>
             </div>
           </div>
           <div class="set-row">
             <span class="k">启用应用通知</span>
             <div class="grow">
               <button class="switch" :class="{ on: appForm.enabled }" @click="appForm.enabled = !appForm.enabled" />
-              <span class="hint">启用后告警优先通过飞书应用发送，Webhook 作为兼容回退</span>
+              <span class="hint">启用后告警优先通过飞书应用发送，备用通知地址作为兼容回退</span>
             </div>
           </div>
           <div class="notification-actions">
@@ -200,7 +200,7 @@ onMounted(() => void load())
             </button>
           </div>
           <p class="settings-note">
-            凭据只保存在本地数据库，接口不会回传 App Secret。修改 App ID 后长连接需要重启 backend 才能重建。
+            凭据只保存在本地数据库，接口不会回传应用密钥。保存后长连接会自动重建，无需重启后端服务。
           </p>
         </div>
 
@@ -213,25 +213,25 @@ onMounted(() => void load())
                 :label="connection?.running ? '长连接运行中' : connection?.restart_required ? '需重启' : '未连接'"
               />
             </div>
-            <div class="sub">飞书官方 SDK 长连接订阅 card.action.trigger，无需公网回调地址</div>
+            <div class="sub">飞书官方 SDK 长连接订阅卡片按钮回调，无需公网回调地址</div>
           </div>
           <div class="connection-rows">
             <div class="connection-row"><span>连接状态</span><b>{{ connection?.running ? '运行中' : '未连接' }}</b></div>
-            <div class="connection-row"><span>订阅事件</span><b>card.action.trigger</b></div>
+            <div class="connection-row"><span>订阅事件</span><b>卡片回传交互</b></div>
             <div class="connection-row"><span>最近回调</span><b>{{ connection?.last_event_at ? dateTime(connection.last_event_at) : '—' }}</b></div>
             <div class="connection-row"><span>最近事件</span><b>{{ connection?.last_event_at ? timeAgo(connection.last_event_at) : '—' }}</b></div>
           </div>
           <div v-if="connection?.last_error" class="notice-box connection-error">{{ connection.last_error }}</div>
           <div v-if="connection?.restart_required" class="notice-box" style="margin: 12px 20px 0; border-color: rgba(255,178,36,.35); color: #ffc65c">
-            飞书应用凭据已变更，请重启 backend：<code>docker compose restart backend</code>
+            旧长连接未能停止，请重启后端服务：<code>docker compose restart backend</code>
           </div>
           <div class="connection-guide">
             <b>飞书侧配置步骤</b>
             <ol>
               <li>开放平台创建企业自建应用，添加机器人能力。</li>
               <li>添加权限：发送消息、上传图片、读取群信息。</li>
-              <li>事件订阅选择“长连接”，添加“卡片回传交互”事件。</li>
-              <li>把机器人加入目标群，复制群 Chat ID 填入左侧。</li>
+              <li>事件订阅选择“使用长连接接收事件”，添加“卡片回传交互”事件。</li>
+              <li>把机器人加入目标群，复制群聊 ID 填入左侧。</li>
               <li>发布应用版本，等待管理员审核通过。</li>
             </ol>
           </div>
@@ -325,13 +325,18 @@ onMounted(() => void load())
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+}
+.notification-grid > .card {
+  display: flex;
+  flex-direction: column;
 }
 .notification-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
   padding: 18px 20px;
+  margin-top: auto;
   flex-wrap: wrap;
 }
 .connection-rows {
@@ -359,7 +364,7 @@ onMounted(() => void load())
   color: #ff8296;
 }
 .connection-guide {
-  margin: 16px 20px 20px;
+  margin: auto 20px 20px;
   padding: 14px 16px;
   border: 1px solid var(--line-soft);
   border-radius: 11px;

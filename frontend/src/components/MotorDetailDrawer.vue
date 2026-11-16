@@ -11,6 +11,7 @@ import StateBadge from '@/components/StateBadge.vue'
 import { useUiStore } from '@/stores/ui'
 import { downloadCsv } from '@/utils/download'
 import {
+  OPERATING_STATE_TEXT,
   STATUS_TEXT,
   dateTime,
   fmt,
@@ -152,6 +153,12 @@ function goAnalysis() {
               :style="{ color: (phaseImbalance || 0) >= 10 ? '#FFC65C' : '#5FE3BB' }"
             >
               {{ fmt(phaseImbalance) }} %
+            </div>
+          </div>
+          <div class="info-cell">
+            <div class="l">运行状态</div>
+            <div class="v" style="font-size: 13px">
+              {{ OPERATING_STATE_TEXT[motor.operating_state] }}
             </div>
           </div>
           <div class="info-cell">

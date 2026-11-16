@@ -8,7 +8,7 @@ import Icon from '@/components/Icon.vue'
 import StateBadge from '@/components/StateBadge.vue'
 import { useAppStore } from '@/stores/app'
 import { useUiStore } from '@/stores/ui'
-import { acceptanceClass, dateTime, timeAgo } from '@/utils/format'
+import { OPERATING_STATE_TEXT, acceptanceClass, dateTime, timeAgo } from '@/utils/format'
 
 const app = useAppStore()
 const ui = useUiStore()
@@ -38,8 +38,20 @@ function snapshot(motor: ThresholdMotor): string {
     current_deviation_pct: motor.current_deviation_pct,
     phase_imbalance_pct: motor.phase_imbalance_pct,
     vibration_limit_mm_s: motor.vibration_limit_mm_s,
+    vibration_deviation_pct: motor.vibration_deviation_pct,
     rise_rate_limit_c_per_day: motor.rise_rate_limit_c_per_day,
     notify_enabled: motor.notify_enabled,
+    off_current_max_a: motor.off_current_max_a,
+    running_current_min_a: motor.running_current_min_a,
+    state_running_current_a: motor.state_running_current_a,
+    state_running_temp_c: motor.state_running_temp_c,
+    state_running_vibration_mm_s: motor.state_running_vibration_mm_s,
+    state_standby_current_a: motor.state_standby_current_a,
+    state_standby_temp_c: motor.state_standby_temp_c,
+    state_standby_vibration_mm_s: motor.state_standby_vibration_mm_s,
+    state_off_current_a: motor.state_off_current_a,
+    state_off_temp_c: motor.state_off_temp_c,
+    state_off_vibration_mm_s: motor.state_off_vibration_mm_s,
   })
 }
 
@@ -81,6 +93,29 @@ function toggleNotify(motor: ThresholdMotor) {
   markDirty()
 }
 
+function stateRange(motor: ThresholdMotor): string {
+  const off = motor.off_current_max_a
+  const running = motor.running_current_min_a
+  if (running > off) {
+    return `关机 ≤ ${off} A · 待机 ${off}–${running} A · 工作 ≥ ${running} A`
+  }
+  return `关机 ≤ ${off} A · 其余按工作状态判断`
+}
+
+function hasStateProfile(motor: ThresholdMotor): boolean {
+  return [
+    motor.state_running_current_a,
+    motor.state_running_temp_c,
+    motor.state_running_vibration_mm_s,
+    motor.state_standby_current_a,
+    motor.state_standby_temp_c,
+    motor.state_standby_vibration_mm_s,
+    motor.state_off_current_a,
+    motor.state_off_temp_c,
+    motor.state_off_vibration_mm_s,
+  ].some((value) => value > 0)
+}
+
 async function saveAll() {
   if (!settings.value || saving.value) return
   saving.value = true
@@ -94,8 +129,20 @@ async function saveAll() {
         current_deviation_pct: motor.current_deviation_pct,
         phase_imbalance_pct: motor.phase_imbalance_pct,
         vibration_limit_mm_s: motor.vibration_limit_mm_s,
+        vibration_deviation_pct: motor.vibration_deviation_pct,
         rise_rate_limit_c_per_day: motor.rise_rate_limit_c_per_day,
         notify_enabled: motor.notify_enabled,
+        off_current_max_a: motor.off_current_max_a,
+        running_current_min_a: motor.running_current_min_a,
+        state_running_current_a: motor.state_running_current_a,
+        state_running_temp_c: motor.state_running_temp_c,
+        state_running_vibration_mm_s: motor.state_running_vibration_mm_s,
+        state_standby_current_a: motor.state_standby_current_a,
+        state_standby_temp_c: motor.state_standby_temp_c,
+        state_standby_vibration_mm_s: motor.state_standby_vibration_mm_s,
+        state_off_current_a: motor.state_off_current_a,
+        state_off_temp_c: motor.state_off_temp_c,
+        state_off_vibration_mm_s: motor.state_off_vibration_mm_s,
       })
     }
     ui.notify('ok', '阈值配置已保存并生效', '告警阈值已同步到后台服务')
@@ -237,6 +284,20 @@ onMounted(() => void load())
                     <span style="font-size: 12px; color: var(--faint)">mm/s</span>
                   </div>
                   <div class="settings-slider">
+                    <span class="k">振动偏离</span>
+                    <input
+                      v-model.number="motor.vibration_deviation_pct"
+                      type="number"
+                      class="input"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      style="width: 90px"
+                      @input="markDirty"
+                    />
+                    <span style="font-size: 12px; color: var(--faint)">%</span>
+                  </div>
+                  <div class="settings-slider">
                     <span class="k">温升速率线</span>
                     <input
                       v-model.number="motor.rise_rate_limit_c_per_day"
@@ -250,6 +311,77 @@ onMounted(() => void load())
                     />
                     <span style="font-size: 12px; color: var(--faint)">°C/天</span>
                   </div>
+                </div>
+
+                <div class="state-config">
+                  <div class="state-config-head">
+                    <b>状态化基准</b>
+                    <span class="state-current">
+                      当前 {{ OPERATING_STATE_TEXT[motor.operating_state] }}
+                    </span>
+                    <span class="state-range">{{ stateRange(motor) }}</span>
+                    <span :class="['state-ready', hasStateProfile(motor) ? 'ok' : '']">
+                      {{ hasStateProfile(motor) ? '已配置状态正常值' : '尚未配置状态正常值' }}
+                    </span>
+                  </div>
+                  <div class="state-thresholds">
+                    <label>
+                      关机电流 ≤
+                      <input
+                        v-model.number="motor.off_current_max_a"
+                        type="number"
+                        class="input"
+                        min="0"
+                        step="0.1"
+                        @input="markDirty"
+                      />
+                      A
+                    </label>
+                    <label>
+                      工作电流 ≥
+                      <input
+                        v-model.number="motor.running_current_min_a"
+                        type="number"
+                        class="input"
+                        min="0"
+                        step="0.1"
+                        @input="markDirty"
+                      />
+                      A
+                    </label>
+                    <span class="hint">工作下限填 0 表示不启用待机区间</span>
+                  </div>
+                  <details class="state-profile">
+                    <summary>
+                      工作 / 待机 / 关机正常值
+                      <span>用于状态化偏离判断，留 0 表示不使用该项</span>
+                    </summary>
+                    <div class="state-profile-grid">
+                      <span class="head">状态</span>
+                      <span class="head">电流 A</span>
+                      <span class="head">温度 °C</span>
+                      <span class="head">振动 mm/s</span>
+
+                      <span class="state-name running">工作</span>
+                      <input v-model.number="motor.state_running_current_a" type="number" class="input" min="0" step="0.1" @input="markDirty" />
+                      <input v-model.number="motor.state_running_temp_c" type="number" class="input" min="0" step="0.1" @input="markDirty" />
+                      <input v-model.number="motor.state_running_vibration_mm_s" type="number" class="input" min="0" step="0.01" @input="markDirty" />
+
+                      <span class="state-name standby">待机</span>
+                      <input v-model.number="motor.state_standby_current_a" type="number" class="input" min="0" step="0.1" @input="markDirty" />
+                      <input v-model.number="motor.state_standby_temp_c" type="number" class="input" min="0" step="0.1" @input="markDirty" />
+                      <input v-model.number="motor.state_standby_vibration_mm_s" type="number" class="input" min="0" step="0.01" @input="markDirty" />
+
+                      <span class="state-name off">关机</span>
+                      <input v-model.number="motor.state_off_current_a" type="number" class="input" min="0" step="0.1" @input="markDirty" />
+                      <input v-model.number="motor.state_off_temp_c" type="number" class="input" min="0" step="0.1" @input="markDirty" />
+                      <input v-model.number="motor.state_off_vibration_mm_s" type="number" class="input" min="0" step="0.01" @input="markDirty" />
+                    </div>
+                    <p class="state-note">
+                      偏离判断优先使用当前状态的正常值；状态切换当次不触发偏离、温升、电流/振动越限通知，
+                      避免启停瞬间的大幅波动误报。温度上限等安全阈值仍持续生效。
+                    </p>
+                  </details>
                 </div>
               </div>
             </div>
@@ -276,7 +408,7 @@ onMounted(() => void load())
               </div>
             </div>
             <div class="set-row">
-              <span class="k">Webhook 回退</span>
+              <span class="k">备用通知地址</span>
               <div class="grow">
                 <span class="hint">{{
                   settings.feishu.masked_webhook || '未配置，可仅使用飞书应用发送'
@@ -435,8 +567,120 @@ onMounted(() => void load())
 #view-settings .threshold-card .settings-two-col {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 0 22px;
+}
+.state-config {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line-soft);
+}
+.state-config-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.state-config-head b {
+  font-size: 12px;
+}
+.state-current {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.state-range {
+  font-size: 11.5px;
+  color: #7fe7f7;
+}
+.state-ready {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+.state-ready.ok {
+  color: #5fe3bb;
+}
+.state-thresholds {
+  display: flex;
+  align-items: center;
+  gap: 14px 22px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.state-thresholds label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.state-thresholds .input {
+  width: 84px;
+}
+.state-thresholds .hint {
+  font-size: 11px;
+  color: var(--faint);
+}
+.state-profile {
+  margin-top: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+.state-profile summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.state-profile summary span {
+  color: var(--faint);
+  font-size: 10.5px;
+}
+.state-profile-grid {
+  display: grid;
+  grid-template-columns: 84px repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+  align-items: center;
+  padding: 0 12px 6px;
+}
+.state-profile-grid .head {
+  font-size: 10.5px;
+  color: var(--faint);
+}
+.state-profile-grid .state-name {
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--panel-3);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.state-name.running {
+  color: #5fe3bb;
+}
+.state-name.standby {
+  color: #ffc65c;
+}
+.state-name.off {
+  color: #8e9bb8;
+}
+.state-profile-grid .input {
+  width: 100%;
+}
+.state-note {
+  margin: 0;
+  padding: 4px 12px 12px;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--faint);
 }
 @media (max-width: 1200px) {
   #view-settings {
@@ -456,19 +700,19 @@ onMounted(() => void load())
   #view-settings .threshold-card .settings-motor-body {
     grid-template-columns: 1fr;
   }
-  #view-settings .threshold-card .settings-two-col {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 @media (max-width: 620px) {
-  #view-settings .threshold-card .settings-two-col {
-    grid-template-columns: 1fr;
-  }
   #view-settings .settings-motor-head .hint {
     display: none;
   }
   #view-settings .settings-motor-head .switch {
     margin-left: auto;
+  }
+  #view-settings .state-profile {
+    overflow-x: auto;
+  }
+  #view-settings .state-profile-grid {
+    min-width: 430px;
   }
 }
 </style>

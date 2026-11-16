@@ -1,4 +1,10 @@
-import type { AlarmLevel, AlarmStatus, MotorStatus, NotificationStatus } from '@/api/types'
+import type {
+  AlarmLevel,
+  AlarmStatus,
+  MotorOperatingState,
+  MotorStatus,
+  NotificationStatus,
+} from '@/api/types'
 
 export function fmt(value: number | null | undefined, digits = 1): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '—'
@@ -68,6 +74,13 @@ export const STATUS_TEXT: Record<MotorStatus, string> = {
   warn: '警告',
   crit: '严重',
   unknown: '未接入',
+}
+
+export const OPERATING_STATE_TEXT: Record<MotorOperatingState, string> = {
+  running: '工作',
+  standby: '待机',
+  off: '关机',
+  unknown: '未知',
 }
 
 export const LEVEL_TEXT: Record<AlarmLevel, string> = {

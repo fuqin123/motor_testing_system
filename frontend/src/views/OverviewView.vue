@@ -16,6 +16,7 @@ import { useAppStore } from '@/stores/app'
 import { useUiStore } from '@/stores/ui'
 import {
   NOTIFICATION_TEXT,
+  OPERATING_STATE_TEXT,
   STATUS_TEXT,
   average,
   fmt,
@@ -717,6 +718,9 @@ onMounted(() => {
             <span v-if="motor.pilot" class="badge pilot" style="font-size: 10px; padding: 2px 8px"
               >试点</span
             >
+            <span :class="['state-chip', motor.operating_state]">{{
+              OPERATING_STATE_TEXT[motor.operating_state]
+            }}</span>
             <StateBadge :tone="statusClass(motor.status)" :label="STATUS_TEXT[motor.status]" />
           </div>
           <div class="motor-metrics">
@@ -940,6 +944,27 @@ onMounted(() => {
   border-color: rgba(157, 124, 255, 0.5);
   color: #c9b3ff;
   background: rgba(157, 124, 255, 0.12);
+}
+.state-chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  border: 1px solid var(--line);
+  color: var(--faint);
+}
+.state-chip.running {
+  color: #5fe3bb;
+  border-color: rgba(95, 227, 187, 0.35);
+  background: rgba(95, 227, 187, 0.08);
+}
+.state-chip.standby {
+  color: #ffc65c;
+  border-color: rgba(255, 198, 92, 0.35);
+  background: rgba(255, 198, 92, 0.08);
+}
+.state-chip.off {
+  color: var(--muted);
+  background: var(--panel-3);
 }
 .chart-summary-item small {
   font-size: 10px;

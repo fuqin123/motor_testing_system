@@ -1,4 +1,5 @@
 export type MotorStatus = 'ok' | 'warn' | 'crit' | 'unknown'
+export type MotorOperatingState = 'running' | 'standby' | 'off' | 'unknown'
 export type AlarmLevel = 'crit' | 'warn' | 'info'
 export type AlarmStatus = 'open' | 'ack' | 'closed'
 export type NotificationStatus = 'pending' | 'sent' | 'failed' | 'skipped'
@@ -74,6 +75,7 @@ export interface MotorCard extends MotorSummary {
   vibration_y: number | null
   vibration_z: number | null
   vibration_total_mm_s: number | null
+  operating_state: MotorOperatingState
   load_pct: number | null
   temp_deviation_pct: number | null
   last_seen_at: string | null
@@ -212,6 +214,7 @@ export interface SelfAnalysis {
     current_a: number | null
     current_b: number | null
     current_c: number | null
+    operating_state?: MotorOperatingState
     load_pct: number | null
     quality: string | null
     ts: string | null
@@ -362,8 +365,21 @@ export interface ThresholdMotor {
   current_deviation_pct: number
   phase_imbalance_pct: number
   vibration_limit_mm_s: number
+  vibration_deviation_pct: number
   rise_rate_limit_c_per_day: number
   notify_enabled: boolean
+  off_current_max_a: number
+  running_current_min_a: number
+  state_running_current_a: number
+  state_running_temp_c: number
+  state_running_vibration_mm_s: number
+  state_standby_current_a: number
+  state_standby_temp_c: number
+  state_standby_vibration_mm_s: number
+  state_off_current_a: number
+  state_off_temp_c: number
+  state_off_vibration_mm_s: number
+  operating_state: MotorOperatingState
 }
 
 export interface AcceptanceItem {
