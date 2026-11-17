@@ -1,6 +1,6 @@
 # API 接口文档
 
-> 版本：v0.5.0 · 2026-11-16
+> 版本：v0.6.0 · 2026-11-17
 > Base URL：`http://<host>:8000/api/v1`
 > 在线文档：`/api/docs`（Swagger UI）· `/api/redoc` · `/api/openapi.json`
 
@@ -373,6 +373,9 @@
   "phase_imbalance_pct": 10,
   "vibration_limit_mm_s": 4.5,
   "vibration_deviation_pct": 30,
+  "temp_notify_base_c": 40,
+  "temp_confirm_count": 2,
+  "current_confirm_count": 2,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true,
   "pilot": true,
@@ -402,6 +405,9 @@
   "phase_imbalance_pct": 10.0,
   "vibration_limit_mm_s": 4.5,
   "vibration_deviation_pct": 30.0,
+  "temp_notify_base_c": 40.0,
+  "temp_confirm_count": 2,
+  "current_confirm_count": 2,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true,
   "pilot": true,
@@ -427,7 +433,10 @@
 - `running_current_min_a`：电流 ≥ 此值判为工作；介于关机上限与工作下限之间为待机。工作下限为 0 时不启用待机区间。
 - `state_running_current_a` / `state_running_temp_c` / `state_running_vibration_mm_s`：工作状态正常值。
 - `state_standby_*`、`state_off_*`：待机、关机状态正常值。
-- 正常值留 0 表示该状态不使用该项；待机/关机不会回退到工作基线。状态切换当次不触发偏离、温升、电流不平衡、电流/振动越限，温度硬上限仍生效。
+- 正常值留 0 表示该状态不使用该项；待机/关机不会回退到工作基线。状态切换当次不触发偏离、电流不平衡、电流/振动越限，温度硬上限仍生效。
+- `temp_notify_base_c`：温度低于该值时不发送温度偏离通知，默认 0（不启用下限）。
+- `temp_confirm_count` / `current_confirm_count`：温度/电流类异常连续命中次数，范围 1–10，默认 2。
+- 温升速率已从阈值/通知规则移除；`rise_rate_limit_c_per_day` 字段保留用于兼容，不再产生 `temp_rise` 告警。
 
 ### 4.5 新增/更新电机
 
@@ -846,6 +855,9 @@
       "phase_imbalance_pct": 10,
       "vibration_limit_mm_s": 4.5,
       "vibration_deviation_pct": 30,
+      "temp_notify_base_c": 40.0,
+      "temp_confirm_count": 2,
+      "current_confirm_count": 2,
       "rise_rate_limit_c_per_day": 1.0,
       "notify_enabled": true,
       "off_current_max_a": 1.0,
@@ -879,6 +891,23 @@
   "acceptance": { "items": [], "generated_at": "2026-11-12T06:30:00Z", "pass_count": 2, "total_auto": 5 }
 }
 ```
+
+### 8.1.1 保存采样间隔
+
+`PUT /settings/sampling`
+
+```json
+{ "interval_minutes": 30 }
+```
+
+响应：
+
+```json
+{ "interval_minutes": 30 }
+```
+
+- 范围 1–120 分钟；保存后采集线程自动重排下一轮，无需重启。
+- 配置持久化到 `app_configs.sampling`，重启后恢复。
 
 ### 8.2 保存通知设置
 
