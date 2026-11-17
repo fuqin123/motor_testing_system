@@ -15,6 +15,7 @@ from app.core.logging import configure_logging
 from app.db.init_db import init_db
 from app.services.collector import get_collector, start_collector
 from app.services.feishu_longconn import ensure_connection_from_db
+from app.services.settings import apply_sampling_config_from_db
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     configure_logging(settings.log_level)
     init_db()
+    apply_sampling_config_from_db()
     if settings.seed_demo_on_start:
         from app.db.seed import seed_demo
 

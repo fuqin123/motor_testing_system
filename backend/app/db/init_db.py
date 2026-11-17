@@ -36,6 +36,13 @@ def init_db() -> None:
             db.add(AppConfig(key="notifications", value=DEFAULT_NOTIFICATION_CONFIG))
         if db.get(AppConfig, "feishu_app") is None:
             db.add(AppConfig(key="feishu_app", value=DEFAULT_FEISHU_APP_CONFIG))
+        if db.get(AppConfig, "sampling") is None:
+            db.add(
+                AppConfig(
+                    key="sampling",
+                    value={"interval_minutes": settings.poll_interval_minutes},
+                )
+            )
         if db.get(AppConfig, "pilot") is None:
             db.add(
                 AppConfig(

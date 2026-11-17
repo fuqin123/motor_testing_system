@@ -17,13 +17,12 @@ from app.services.alarms import (
     handle_gateway_result,
     handle_sensor_result,
 )
-from app.services.analysis import daily_slope
 from app.services.baseline import compute_baseline
 from app.services.feishu import notify_alarm
 from app.services.modbus import GatewayPlan, GatewayReadResult, SensorPlan, read_gateway
 from app.services.settings import get_notification_config
 from app.services.simulator import simulate_gateway
-from app.services.telemetry import classify_operating_state, latest_readings, series_readings
+from app.services.telemetry import classify_operating_state, latest_readings
 
 logger = logging.getLogger(__name__)
 
@@ -275,16 +274,12 @@ def persist_cycle(
                 if quality == "error":
                     continue
                 baseline = compute_baseline(db, motor, now=ts)
-                rise_readings = series_readings(
-                    db, motor.id, ts - timedelta(days=settings.rise_rate_days), ts
-                )
-                slope, _ = daily_slope(rise_readings, min_days=3)
                 candidates = evaluate_rules(
                     motor,
                     payload["temperature"],
                     payload["current_avg"],
                     baseline,
-                    slope,
+                    None,
                     current_a=payload["current_a"],
                     current_b=payload["current_b"],
                     current_c=payload["current_c"],
@@ -370,6 +365,7 @@ class CollectorService(threading.Thread):
         super().__init__(name="motor-collector", daemon=True)
         self._stop_event = threading.Event()
         self._force_event = threading.Event()
+        self._reschedule_event = threading.Event()
         self._status_lock = threading.Lock()
         self._status: dict = {
             "running": False,
@@ -392,6 +388,9 @@ class CollectorService(threading.Thread):
 
     def trigger(self) -> None:
         self._force_event.set()
+
+    def reschedule(self) -> None:
+        self._reschedule_event.set()
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -420,13 +419,20 @@ class CollectorService(threading.Thread):
             while not self._stop_event.is_set():
                 next_run = next_poll_time(utcnow(), settings.poll_interval_minutes)
                 self._update(next_run_at=iso(next_run))
+                rescheduled = False
                 while not self._stop_event.is_set():
+                    if self._reschedule_event.is_set():
+                        self._reschedule_event.clear()
+                        rescheduled = True
+                        break
                     remaining = (next_run - utcnow()).total_seconds()
                     if remaining <= 0 or self._force_event.is_set():
                         break
                     self._stop_event.wait(min(1.0, remaining))
                 if self._stop_event.is_set():
                     break
+                if rescheduled:
+                    continue
                 if self._force_event.is_set():
                     self._force_event.clear()
                     logger.info("收到手动召测请求")

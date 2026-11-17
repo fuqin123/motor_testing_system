@@ -10,15 +10,23 @@ from app.api.serializers import pilot_info
 from app.core.config import settings
 from app.core.security import UserContext
 from app.db.models import Motor
-from app.schemas import FeishuAppSettingsUpdate, FeishuTestResponse, NotificationSettingsUpdate
+from app.schemas import (
+    FeishuAppSettingsUpdate,
+    FeishuTestResponse,
+    NotificationSettingsUpdate,
+    SamplingUpdate,
+)
 from app.services.acceptance import acceptance_snapshot
 from app.services.feishu import send_test_message
+from app.services.collector import get_collector
 from app.services.feishu_app import send_test_app
 from app.services.feishu_longconn import connection_status, ensure_connection
 from app.services.telemetry import latest_readings
 from app.services.settings import (
+    apply_sampling_config,
     get_feishu_app_config,
     get_notification_config,
+    save_sampling_config,
     public_feishu_app_config,
     save_feishu_app_config,
     save_notification_config,
@@ -59,6 +67,9 @@ def get_settings(
                 "phase_imbalance_pct": motor.phase_imbalance_pct,
                 "vibration_limit_mm_s": motor.vibration_limit_mm_s,
                 "vibration_deviation_pct": motor.vibration_deviation_pct,
+                "temp_notify_base_c": motor.temp_notify_base_c,
+                "temp_confirm_count": motor.temp_confirm_count,
+                "current_confirm_count": motor.current_confirm_count,
                 "rise_rate_limit_c_per_day": motor.rise_rate_limit_c_per_day,
                 "notify_enabled": motor.notify_enabled,
                 "off_current_max_a": motor.off_current_max_a,
@@ -104,6 +115,22 @@ def get_settings(
         "pilot": pilot_info(settings.pilot_start_date, settings.pilot_days, settings.pilot_scope),
         "acceptance": acceptance_snapshot(db),
     }
+
+
+@router.put("/settings/sampling")
+def update_sampling(
+    payload: SamplingUpdate,
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+) -> dict:
+    config = save_sampling_config(db, payload.interval_minutes, user.name)
+    apply_sampling_config(db)
+    audit(db, user, "update_sampling", "sampling", config)
+    db.commit()
+    collector = get_collector()
+    if collector is not None:
+        collector.reschedule()
+    return config
 
 
 @router.put("/settings/notifications")

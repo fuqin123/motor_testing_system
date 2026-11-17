@@ -70,6 +70,9 @@ class Motor(TimestampMixin, Base):
     phase_imbalance_pct: Mapped[float] = mapped_column(Float, default=10.0)
     vibration_limit_mm_s: Mapped[float] = mapped_column(Float, default=4.5)
     vibration_deviation_pct: Mapped[float] = mapped_column(Float, default=30.0)
+    temp_notify_base_c: Mapped[float] = mapped_column(Float, default=0.0)
+    temp_confirm_count: Mapped[int] = mapped_column(Integer, default=2)
+    current_confirm_count: Mapped[int] = mapped_column(Integer, default=2)
     rise_rate_limit_c_per_day: Mapped[float] = mapped_column(Float, default=1.0)
     notify_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -89,6 +92,9 @@ class Motor(TimestampMixin, Base):
         back_populates="motor", cascade="all, delete-orphan"
     )
     readings: Mapped[list["Reading"]] = relationship(
+        back_populates="motor", cascade="all, delete-orphan"
+    )
+    alarm_streaks: Mapped[list["AlarmStreak"]] = relationship(
         back_populates="motor", cascade="all, delete-orphan"
     )
 
@@ -149,6 +155,19 @@ class Reading(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     motor: Mapped["Motor"] = relationship(back_populates="readings")
+
+
+class AlarmStreak(TimestampMixin, Base):
+    __tablename__ = "alarm_streaks"
+    __table_args__ = (UniqueConstraint("motor_id", "rule_key", name="uq_alarm_streak_motor_rule"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    motor_id: Mapped[int] = mapped_column(ForeignKey("motors.id", ondelete="CASCADE"), index=True)
+    rule_key: Mapped[str] = mapped_column(String(32))
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    last_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    motor: Mapped["Motor"] = relationship(back_populates="alarm_streaks")
 
 
 class Alarm(Base):

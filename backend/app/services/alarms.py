@@ -1,14 +1,14 @@
 """告警判定、去重与自动闭环。"""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.time import as_utc, utcnow
-from app.db.models import Alarm, Motor, Reading, Sensor
+from app.db.models import Alarm, AlarmStreak, Motor, Reading, Sensor
 from app.services.baseline import Baseline, deviation_pct
 from app.services.settings import choose_owner
 from app.services.telemetry import OPERATING_STATE_TEXT, classify_operating_state
@@ -84,7 +84,11 @@ def evaluate_rules(
                 )
             )
         elif not state_changed:
-            temp_ref = ref_or_baseline("temp_c", baseline.temp_median if baseline else None)
+            notify_base = float(getattr(motor, "temp_notify_base_c", 0.0) or 0.0)
+            if notify_base > 0 and temperature_c < notify_base:
+                temp_ref = None
+            else:
+                temp_ref = ref_or_baseline("temp_c", baseline.temp_median if baseline else None)
             temp_dev = deviation_pct(temperature_c, temp_ref)
             if temp_dev is not None and temp_dev >= motor.temp_deviation_pct:
                 ref_label = (
@@ -246,31 +250,15 @@ def evaluate_rules(
                 )
             )
 
-    if (
-        rise_rate_c_per_day is not None
-        and rise_rate_c_per_day >= motor.rise_rate_limit_c_per_day
-        and motor.rise_rate_limit_c_per_day > 0
-        and state == "running"
-        and not state_changed
-    ):
-        candidates.append(
-            AlarmCandidate(
-                level="warn",
-                rule_key="temp_rise",
-                title="温度持续上升",
-                description=(
-                    f"近 {settings.rise_rate_days} 天温度呈单边上行，温升速率 {rise_rate_c_per_day:+.2f} °C/天，"
-                    f"超过关注线 {motor.rise_rate_limit_c_per_day:.2f} °C/天。"
-                ),
-                metric="rise_rate_c_per_day",
-                value=rise_rate_c_per_day,
-                threshold=motor.rise_rate_limit_c_per_day,
-                unit="°C/天",
-                advice="持续温升多与机械或散热侧劣化相关，建议一周内安排检查。",
-            )
-        )
-
     return candidates
+
+
+def _required_confirm_count(motor: Motor, rule_key: str) -> int:
+    if rule_key in ("temp_high", "temp_deviation"):
+        return max(1, int(getattr(motor, "temp_confirm_count", 1) or 1))
+    if rule_key in ("current_high", "current_deviation", "current_imbalance"):
+        return max(1, int(getattr(motor, "current_confirm_count", 1) or 1))
+    return 1
 
 
 def _find_active_motor_alarm(db: Session, motor_code: str, rule_key: str) -> Alarm | None:
@@ -299,6 +287,16 @@ def apply_reading_alarms(
     active_by_key = {alarm.rule_key: alarm for alarm in active}
     candidate_keys = {candidate.rule_key for candidate in candidates}
     new_alarms: list[Alarm] = []
+    streaks = {
+        row.rule_key: row
+        for row in db.scalars(
+            select(AlarmStreak).where(AlarmStreak.motor_id == motor.id)
+        ).all()
+    }
+    for rule_key, streak in list(streaks.items()):
+        if rule_key not in candidate_keys:
+            db.delete(streak)
+            streaks.pop(rule_key, None)
 
     for candidate in candidates:
         existing = active_by_key.get(candidate.rule_key)
@@ -307,7 +305,39 @@ def apply_reading_alarms(
             existing.description = candidate.description
             existing.last_seen_at = now
             existing.normal_count = 0
+            streak = streaks.pop(candidate.rule_key, None)
+            if streak is not None:
+                db.delete(streak)
             continue
+
+        required = _required_confirm_count(motor, candidate.rule_key)
+        streak = streaks.get(candidate.rule_key)
+        if required > 1:
+            if streak is None:
+                streak = AlarmStreak(
+                    motor_id=motor.id, rule_key=candidate.rule_key, count=0
+                )
+                db.add(streak)
+                streaks[candidate.rule_key] = streak
+            last_ts = as_utc(streak.last_ts)
+            if last_ts is None:
+                streak.count = 1
+            elif last_ts < now:
+                interval_seconds = max(60, settings.poll_interval_minutes * 60)
+                if now - last_ts > timedelta(seconds=interval_seconds * 1.5):
+                    streak.count = 1
+                else:
+                    streak.count += 1
+            streak.last_ts = now
+            if streak.count < required:
+                db.flush()
+                continue
+            db.delete(streak)
+            streaks.pop(candidate.rule_key, None)
+        elif streak is not None:
+            db.delete(streak)
+            streaks.pop(candidate.rule_key, None)
+
         suppressed = db.scalar(
             select(Alarm)
             .where(

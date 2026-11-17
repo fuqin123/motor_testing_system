@@ -48,7 +48,7 @@ def test_evaluate_deviation_and_current_high():
     keys = {candidate.rule_key for candidate in candidates}
     assert "temp_deviation" in keys
     assert "current_high" in keys
-    assert "temp_rise" in keys
+    assert "temp_rise" not in keys
 
 
 def test_evaluate_without_baseline():
@@ -96,7 +96,14 @@ def test_daily_slope_multiple_days():
 
 
 def test_alarm_dedup_and_auto_close(db):
-    motor = Motor(code="T-01", name="测试电机", rated_current_a=100, temp_limit_c=85)
+    motor = Motor(
+        code="T-01",
+        name="测试电机",
+        rated_current_a=100,
+        temp_limit_c=85,
+        temp_confirm_count=1,
+        current_confirm_count=1,
+    )
     db.add(motor)
     db.flush()
     reading = Reading(
@@ -192,7 +199,14 @@ def test_api_smoke(client, db):
 
 
 def test_manual_close_suppresses_regeneration(db):
-    motor = Motor(code="T-SUP", name="抑制测试电机", rated_current_a=100, temp_limit_c=85)
+    motor = Motor(
+        code="T-SUP",
+        name="抑制测试电机",
+        rated_current_a=100,
+        temp_limit_c=85,
+        temp_confirm_count=1,
+        current_confirm_count=1,
+    )
     db.add(motor)
     db.flush()
     reading = Reading(
@@ -662,3 +676,77 @@ def test_feishu_long_connection_hot_reload(monkeypatch):
         if longconn._connection is not None:
             longconn._connection.stop()
         longconn._connection = None
+
+
+def test_temperature_notify_base_suppresses_low_temperature(db):
+    motor = Motor(
+        code="T-BASE",
+        name="温度通知基数测试",
+        rated_current_a=100,
+        temp_limit_c=85,
+        temp_confirm_count=1,
+        temp_notify_base_c=50,
+    )
+    db.add(motor)
+    db.flush()
+    low = Reading(
+        motor_id=motor.id,
+        ts=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        temperature_c=40,
+        current_avg_a=50,
+        quality="ok",
+    )
+    low_candidates = evaluate_rules(motor, low.temperature_c, 50, baseline_stub(), None)
+    assert "temp_deviation" not in {item.rule_key for item in low_candidates}
+
+    high = Reading(
+        motor_id=motor.id,
+        ts=datetime(2026, 1, 1, 0, 15, tzinfo=timezone.utc),
+        temperature_c=66,
+        current_avg_a=50,
+        quality="ok",
+    )
+    high_candidates = evaluate_rules(motor, high.temperature_c, 50, baseline_stub(), None)
+    assert "temp_deviation" in {item.rule_key for item in high_candidates}
+
+
+def test_alarm_confirmation_count(db):
+    motor = Motor(
+        code="T-CONFIRM",
+        name="连续确认测试",
+        rated_current_a=100,
+        temp_limit_c=85,
+        temp_confirm_count=3,
+        current_confirm_count=1,
+    )
+    db.add(motor)
+    db.flush()
+    config = {"owners": ["王工"], "critical_enabled": True, "warning_enabled": True}
+    base_ts = datetime(2026, 2, 1, tzinfo=timezone.utc)
+    created = []
+    for index in range(3):
+        ts = base_ts + timedelta(minutes=15 * index)
+        reading = Reading(
+            motor_id=motor.id,
+            ts=ts,
+            temperature_c=70.5,
+            current_avg_a=80,
+            quality="ok",
+        )
+        candidates = evaluate_rules(motor, reading.temperature_c, 80, baseline_stub(), None)
+        created.append(apply_reading_alarms(db, motor, reading, candidates, config, now=ts))
+    assert created[0] == []
+    assert created[1] == []
+    assert len(created[2]) == 1
+    assert created[2][0].rule_key == "temp_deviation"
+
+
+def test_sampling_interval_api(client):
+    response = client.put("/api/v1/settings/sampling", json={"interval_minutes": 30})
+    assert response.status_code == 200
+    assert response.json()["interval_minutes"] == 30
+    settings_data = client.get("/api/v1/settings").json()
+    assert settings_data["sampling"]["interval_minutes"] == 30
+    invalid = client.put("/api/v1/settings/sampling", json={"interval_minutes": 0})
+    assert invalid.status_code == 422
+    client.put("/api/v1/settings/sampling", json={"interval_minutes": 15})

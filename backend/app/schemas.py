@@ -20,6 +20,9 @@ class ThresholdUpdate(BaseModel):
     phase_imbalance_pct: float | None = Field(default=None, ge=0, le=100)
     vibration_limit_mm_s: float | None = Field(default=None, ge=0, le=100)
     vibration_deviation_pct: float | None = Field(default=None, ge=0, le=100)
+    temp_notify_base_c: float | None = Field(default=None, ge=-50, le=300)
+    temp_confirm_count: int | None = Field(default=None, ge=1, le=10)
+    current_confirm_count: int | None = Field(default=None, ge=1, le=10)
     rise_rate_limit_c_per_day: float | None = Field(default=None, ge=0, le=50)
     notify_enabled: bool | None = None
     pilot: bool | None = None
@@ -58,6 +61,10 @@ class NotificationSettingsUpdate(BaseModel):
 class PollResponse(BaseModel):
     accepted: bool
     message: str
+
+
+class SamplingUpdate(BaseModel):
+    interval_minutes: int = Field(ge=1, le=120)
 
 
 class FeishuTestResponse(BaseModel):

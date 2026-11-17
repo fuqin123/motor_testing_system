@@ -2,8 +2,10 @@
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.init_db import DEFAULT_FEISHU_APP_CONFIG, DEFAULT_NOTIFICATION_CONFIG
 from app.db.models import AppConfig
+from app.db.session import SessionLocal
 
 
 def get_config(db: Session, key: str) -> dict:
@@ -21,6 +23,32 @@ def save_config(db: Session, key: str, value: dict, actor: str) -> dict:
         row.updated_by = actor
     db.flush()
     return dict(row.value)
+
+
+def get_sampling_config(db: Session) -> dict:
+    value = get_config(db, "sampling")
+    try:
+        interval = int(value.get("interval_minutes", settings.poll_interval_minutes))
+    except (TypeError, ValueError):
+        interval = settings.poll_interval_minutes
+    if interval < 1 or interval > 1440:
+        interval = settings.poll_interval_minutes
+    return {"interval_minutes": interval}
+
+
+def save_sampling_config(db: Session, interval_minutes: int, actor: str) -> dict:
+    return save_config(db, "sampling", {"interval_minutes": interval_minutes}, actor)
+
+
+def apply_sampling_config(db: Session) -> dict:
+    config = get_sampling_config(db)
+    settings.poll_interval_minutes = config["interval_minutes"]
+    return config
+
+
+def apply_sampling_config_from_db() -> dict:
+    with SessionLocal() as db:
+        return apply_sampling_config(db)
 
 
 def get_notification_config(db: Session) -> dict:

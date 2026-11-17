@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.time import as_utc, floor_bucket, local_zone, utcnow
 from app.db.models import (
     Alarm,
+    AlarmStreak,
     AuditLog,
     Gateway,
     Motor,
@@ -142,6 +143,7 @@ def _sensor_code(motor_code: str, kind: str) -> str:
 
 
 def _reset_all(db: Session) -> None:
+    db.execute(delete(AlarmStreak))
     db.execute(delete(NotificationLog))
     db.execute(delete(Alarm))
     db.execute(delete(Reading))
@@ -201,6 +203,9 @@ def seed_demo(reset: bool = False) -> bool:
                 current_deviation_pct=10.0,
                 phase_imbalance_pct=10.0,
                 vibration_limit_mm_s=4.5,
+                temp_notify_base_c=40.0,
+                temp_confirm_count=2,
+                current_confirm_count=2,
                 rise_rate_limit_c_per_day=1.0,
                 notify_enabled=True,
             )
@@ -428,22 +433,6 @@ def seed_demo(reset: bool = False) -> bool:
             owner="王工 · 设备科",
         )
         add_alarm(
-            level="warn",
-            rule_key="temp_rise",
-            title="温度持续上升",
-            description="近 7 天温度单边上行，温升速率 +1.1°C/天，超过关注线 1.0°C/天。",
-            advice="安排检查散热风道与轴承润滑。",
-            motor=motors[5],
-            device_code="M-06",
-            value=1.1,
-            threshold=1.0,
-            unit="°C/天",
-            triggered_at=now - timedelta(hours=4),
-            closed_at=now - timedelta(hours=3),
-            solution="补脂并清理散热片，温升恢复正常。",
-            owner="李工 · 电气",
-        )
-        add_alarm(
             level="info",
             rule_key="sensor_error",
             title="采集传感器通信异常",
@@ -555,6 +544,15 @@ def import_points(path: str) -> dict:
             )
             motor.vibration_deviation_pct = float(
                 item.get("vibration_deviation_pct", motor.vibration_deviation_pct or 30)
+            )
+            motor.temp_notify_base_c = float(
+                item.get("temp_notify_base_c", motor.temp_notify_base_c or 0)
+            )
+            motor.temp_confirm_count = int(
+                item.get("temp_confirm_count", motor.temp_confirm_count or 2)
+            )
+            motor.current_confirm_count = int(
+                item.get("current_confirm_count", motor.current_confirm_count or 2)
             )
             motor.off_current_max_a = float(
                 item.get("off_current_max_a", motor.off_current_max_a or 0.5)
