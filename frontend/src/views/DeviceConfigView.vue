@@ -722,16 +722,6 @@ onMounted(() => void load())
             step="0.5"
         /></label>
         <label class="form-field"
-          ><span class="form-label">温升速率线 °C/天</span
-          ><input
-            v-model.number="motorForm.rise_rate_limit_c_per_day"
-            type="number"
-            class="input"
-            min="0"
-            max="50"
-            step="0.1"
-        /></label>
-        <label class="form-field"
           ><span class="form-label">投运时间</span
           ><input v-model="motorForm.install_date" class="input" placeholder="如 2024-01"
         /></label>

@@ -155,6 +155,11 @@ export const api = {
       method: 'POST',
     }),
   settings: () => request<SettingsResponse>('/settings'),
+  updateSampling: (intervalMinutes: number) =>
+    request<{ interval_minutes: number }>('/settings/sampling', {
+      method: 'PUT',
+      body: JSON.stringify({ interval_minutes: intervalMinutes }),
+    }),
   updateNotifications: (payload: Record<string, unknown>) =>
     request<import('./types').NotificationSettings>('/settings/notifications', {
       method: 'PUT',
@@ -194,6 +199,9 @@ export interface ThresholdResponse {
   phase_imbalance_pct: number
   vibration_limit_mm_s: number
   vibration_deviation_pct: number
+  temp_notify_base_c: number
+  temp_confirm_count: number
+  current_confirm_count: number
   rise_rate_limit_c_per_day: number
   notify_enabled: boolean
   pilot: boolean

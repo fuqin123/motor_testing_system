@@ -18,6 +18,7 @@ const thresholdMotors = ref<ThresholdMotor[]>([])
 const originals = ref<Record<string, string>>({})
 const dirty = ref(false)
 const saving = ref(false)
+const samplingInterval = ref(15)
 
 const lora = computed(() => settings.value?.lora || app.meta?.lora || null)
 const pilot = computed(() => settings.value?.pilot || app.pilot || null)
@@ -39,7 +40,9 @@ function snapshot(motor: ThresholdMotor): string {
     phase_imbalance_pct: motor.phase_imbalance_pct,
     vibration_limit_mm_s: motor.vibration_limit_mm_s,
     vibration_deviation_pct: motor.vibration_deviation_pct,
-    rise_rate_limit_c_per_day: motor.rise_rate_limit_c_per_day,
+    temp_notify_base_c: motor.temp_notify_base_c,
+    temp_confirm_count: motor.temp_confirm_count,
+    current_confirm_count: motor.current_confirm_count,
     notify_enabled: motor.notify_enabled,
     off_current_max_a: motor.off_current_max_a,
     running_current_min_a: motor.running_current_min_a,
@@ -59,6 +62,7 @@ async function load() {
   try {
     const data = await api.settings()
     settings.value = data
+    samplingInterval.value = data.sampling.interval_minutes
     thresholdMotors.value = structuredClone(data.motors)
     originals.value = Object.fromEntries(data.motors.map((motor) => [motor.code, snapshot(motor)]))
     dirty.value = false
@@ -120,6 +124,17 @@ async function saveAll() {
   if (!settings.value || saving.value) return
   saving.value = true
   try {
+    if (
+      !Number.isInteger(samplingInterval.value) ||
+      samplingInterval.value < 1 ||
+      samplingInterval.value > 120
+    ) {
+      ui.notify('warn', '采样间隔不合法', '请输入 1–120 之间的整数分钟')
+      return
+    }
+    if (samplingInterval.value !== settings.value.sampling.interval_minutes) {
+      await api.updateSampling(samplingInterval.value)
+    }
     for (const motor of thresholdMotors.value) {
       if (snapshot(motor) === originals.value[motor.code]) continue
       await api.updateThresholds(motor.code, {
@@ -130,7 +145,9 @@ async function saveAll() {
         phase_imbalance_pct: motor.phase_imbalance_pct,
         vibration_limit_mm_s: motor.vibration_limit_mm_s,
         vibration_deviation_pct: motor.vibration_deviation_pct,
-        rise_rate_limit_c_per_day: motor.rise_rate_limit_c_per_day,
+        temp_notify_base_c: motor.temp_notify_base_c,
+        temp_confirm_count: motor.temp_confirm_count,
+        current_confirm_count: motor.current_confirm_count,
         notify_enabled: motor.notify_enabled,
         off_current_max_a: motor.off_current_max_a,
         running_current_min_a: motor.running_current_min_a,
@@ -190,8 +207,8 @@ onMounted(() => void load())
               <h3>阈值配置</h3>
               <div class="right"><span class="badge mut">超过上限即触发飞书提醒</span></div>
               <div class="sub">
-                温度上限 / 单相电流上限 / 三相不平衡 / 振动上限 / 偏离基线 / 温升速率 ·
-                修改后点击底部保存
+                温度上限 / 单相电流上限 / 三相不平衡 / 振动上限 / 温度通知下限 /
+                连续确认次数 · 修改后点击底部保存
               </div>
             </div>
             <div v-for="motor in thresholdMotors" :key="motor.code" class="settings-motor-block">
@@ -298,20 +315,52 @@ onMounted(() => void load())
                     <span style="font-size: 12px; color: var(--faint)">%</span>
                   </div>
                   <div class="settings-slider">
-                    <span class="k">温升速率线</span>
+                    <span class="k">温度通知下限</span>
                     <input
-                      v-model.number="motor.rise_rate_limit_c_per_day"
+                      v-model.number="motor.temp_notify_base_c"
                       type="number"
                       class="input"
                       min="0"
-                      max="20"
-                      step="0.1"
+                      max="200"
+                      step="0.5"
                       style="width: 90px"
                       @input="markDirty"
                     />
-                    <span style="font-size: 12px; color: var(--faint)">°C/天</span>
+                    <span style="font-size: 12px; color: var(--faint)">°C</span>
+                  </div>
+                  <div class="settings-slider">
+                    <span class="k">温度连续次数</span>
+                    <input
+                      v-model.number="motor.temp_confirm_count"
+                      type="number"
+                      class="input"
+                      min="1"
+                      max="10"
+                      step="1"
+                      style="width: 70px"
+                      @input="markDirty"
+                    />
+                    <span style="font-size: 12px; color: var(--faint)">次</span>
+                  </div>
+                  <div class="settings-slider">
+                    <span class="k">电流连续次数</span>
+                    <input
+                      v-model.number="motor.current_confirm_count"
+                      type="number"
+                      class="input"
+                      min="1"
+                      max="10"
+                      step="1"
+                      style="width: 70px"
+                      @input="markDirty"
+                    />
+                    <span style="font-size: 12px; color: var(--faint)">次</span>
                   </div>
                 </div>
+                <p class="settings-note" style="padding: 4px 0 0">
+                  温度通知下限低于该温度时不发送温度偏离通知，建议设为工作温度下限（如
+                  40°C）；温度/电流连续次数用于过滤加卸载、频率调整和电压波动造成的单次异常。
+                </p>
 
                 <div class="state-config">
                   <div class="state-config-head">
@@ -435,8 +484,18 @@ onMounted(() => void load())
             <div class="set-row">
               <span class="k">采样上报间隔</span>
               <div class="grow">
-                <span class="tag">{{ settings.sampling.interval_minutes }} 分钟</span
-                ><span class="hint">现场传感器市电供电，15 分钟周期可兼顾时效与 LoRa 空口占用</span>
+                <input
+                  v-model.number="samplingInterval"
+                  type="number"
+                  class="input"
+                  min="1"
+                  max="120"
+                  step="1"
+                  style="width: 100px"
+                  @input="markDirty"
+                />
+                <span style="font-size: 12px; color: var(--faint)">分钟</span>
+                <span class="hint">1–120 分钟；保存后下一轮按新间隔调度</span>
               </div>
             </div>
             <div class="set-row">

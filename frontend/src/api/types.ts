@@ -366,6 +366,9 @@ export interface ThresholdMotor {
   phase_imbalance_pct: number
   vibration_limit_mm_s: number
   vibration_deviation_pct: number
+  temp_notify_base_c: number
+  temp_confirm_count: number
+  current_confirm_count: number
   rise_rate_limit_c_per_day: number
   notify_enabled: boolean
   off_current_max_a: number
