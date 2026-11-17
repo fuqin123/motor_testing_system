@@ -70,7 +70,7 @@ class Motor(TimestampMixin, Base):
     phase_imbalance_pct: Mapped[float] = mapped_column(Float, default=10.0)
     vibration_limit_mm_s: Mapped[float] = mapped_column(Float, default=4.5)
     vibration_deviation_pct: Mapped[float] = mapped_column(Float, default=30.0)
-    temp_notify_base_c: Mapped[float] = mapped_column(Float, default=0.0)
+    temp_notify_base_c: Mapped[float] = mapped_column(Float, default=40.0)
     temp_confirm_count: Mapped[int] = mapped_column(Integer, default=2)
     current_confirm_count: Mapped[int] = mapped_column(Integer, default=2)
     rise_rate_limit_c_per_day: Mapped[float] = mapped_column(Float, default=1.0)

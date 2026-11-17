@@ -19,7 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     with op.batch_alter_table('motors', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('temp_notify_base_c', sa.Float(), nullable=False, server_default='0'))
+        batch_op.add_column(sa.Column('temp_notify_base_c', sa.Float(), nullable=False, server_default='40'))
         batch_op.add_column(sa.Column('temp_confirm_count', sa.Integer(), nullable=False, server_default='2'))
         batch_op.add_column(sa.Column('current_confirm_count', sa.Integer(), nullable=False, server_default='2'))
 
