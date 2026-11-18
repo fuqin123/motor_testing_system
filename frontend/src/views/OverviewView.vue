@@ -44,7 +44,7 @@ const historicalOverview = ref<Overview | null>(null)
 const pageLoading = ref(false)
 
 const trendRange = ref('24h')
-const trendMotor = ref<string | null>(null)
+const trendMotor = ref<string>('')
 const trendMetrics = ref<Array<'temp' | 'current' | 'vibration'>>(['temp', 'current'])
 const trendPoints = ref<SeriesPoint[]>([])
 const trendLoading = ref(false)
@@ -52,6 +52,7 @@ const quadrant = ref<QuadrantAnalysis | null>(null)
 const motorFilter = ref<'all' | MotorStatus>('all')
 const motorDrawerOpen = ref(false)
 const activeMotorCode = ref<string | null>(null)
+const activeAt = ref<string | null>(null)
 const alarmDrawerOpen = ref(false)
 const activeAlarmId = ref<number | null>(null)
 
@@ -70,7 +71,7 @@ const visibleMotors = computed(() =>
   }),
 )
 const selectedMotor = computed(
-  () => motors.value.find((motor) => motor.code === trendMotor.value) || null,
+  () => motors.value.find((motor) => motor.code === trendMotor.value) || motors.value[0] || null,
 )
 const onlineCount = computed(() => motors.value.filter((motor) => motor.online).length)
 const pilotCount = computed(() => motors.value.filter((motor) => motor.pilot).length)
@@ -302,6 +303,11 @@ async function loadHistorical(date: string) {
 }
 
 async function loadTrend() {
+  if (!trendMotor.value && motors.value.length) trendMotor.value = motors.value[0].code
+  if (!trendMotor.value) {
+    trendPoints.value = []
+    return
+  }
   trendLoading.value = true
   try {
     const data = await api.dashboardTrend(
@@ -340,14 +346,21 @@ function toggleTrendMetric(metric: 'temp' | 'current' | 'vibration') {
   }
 }
 
-function setTrendMotor(code: string | null) {
+function setTrendMotor(code: string) {
   trendMotor.value = code
   void loadTrend()
 }
 
-function openMotor(code: string) {
+function openMotor(code: string, at: string | null = null) {
   activeMotorCode.value = code
+  activeAt.value = at
   motorDrawerOpen.value = true
+}
+
+function onTrendPointClick(index: number) {
+  const point = trendPoints.value[index]
+  if (!point || !trendMotor.value) return
+  openMotor(trendMotor.value, point.ts)
 }
 
 function openAlarm(id: number) {
@@ -379,6 +392,16 @@ async function onDateChange(date: string) {
   }
   await Promise.all([loadTrend(), loadQuadrant()])
 }
+
+watch(
+  () => motors.value.map((motor) => motor.code).join(','),
+  () => {
+    if (!trendMotor.value && motors.value.length) {
+      trendMotor.value = motors.value[0].code
+      void loadTrend()
+    }
+  },
+)
 
 watch(
   () => app.overview?.sampling.last_poll_at,
@@ -474,7 +497,10 @@ onMounted(() => {
           >
             <span :class="['dot', isHistorical ? 'ok' : 'live']" />
             <span v-if="isHistorical">历史回看 · {{ selectedDate }} · 按 15 分钟粒度还原</span>
-            <span v-else>每 {{ app.intervalMinutes }} 分钟上报一次 · LoRa 无线回传</span>
+            <span v-else>
+              {{ selectedDate }} {{ isHistorical ? '全天' : '00:00–现在' }} ·
+              每 {{ app.intervalMinutes }} 分钟上报 · LoRa 无线回传
+            </span>
           </div>
         </div>
 
@@ -488,12 +514,6 @@ onMounted(() => {
         </div>
 
         <div style="padding: 12px 20px 0; display: flex; gap: 7px; flex-wrap: wrap" id="trendChips">
-          <button
-            :class="['chip', trendMotor === null ? 'active' : '']"
-            @click="setTrendMotor(null)"
-          >
-            全部均值
-          </button>
           <button
             v-for="motor in motors"
             :key="motor.code"
@@ -532,6 +552,7 @@ onMounted(() => {
             :height="320"
             y2
             :y3="trendMetrics.includes('vibration')"
+            @point-click="onTrendPointClick"
           />
           <div v-else class="chart-empty" style="height: 304px">该日期暂无趋势数据</div>
         </div>
@@ -546,8 +567,9 @@ onMounted(() => {
             ><i style="background: #9d7cff" />振动总值 mm/s（第三轴）</span
           >
           <span style="margin-left: auto; color: var(--faint)">
-            {{ selectedMotor ? `${selectedMotor.code} · ${selectedMotor.name}` : '全部电机均值' }} ·
-            {{ trendRange === '24h' ? '15 分钟' : trendRange === '7d' ? '1 小时' : '6 小时' }}粒度
+            {{ selectedMotor ? `${selectedMotor.code} · ${selectedMotor.name}` : '请选择电机' }} ·
+            {{ trendRange === '24h' ? '当日 15 分钟' : trendRange === '7d' ? '1 小时' : '6 小时' }}粒度
+            · 点击曲线点查看该时刻详情
           </span>
         </div>
       </div>
@@ -864,6 +886,7 @@ onMounted(() => {
       :open="motorDrawerOpen"
       :code="activeMotorCode"
       :date="isHistorical ? selectedDate : null"
+      :at="activeAt"
       @close="motorDrawerOpen = false"
     />
     <AlarmDetailDrawer

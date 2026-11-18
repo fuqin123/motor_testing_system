@@ -35,6 +35,7 @@ const trendSeries = ref<TrendSeries | null>(null)
 const selectedQuad = ref<string | null>(null)
 const motorDrawerOpen = ref(false)
 const activeMotorCode = ref<string | null>(null)
+const activeAt = ref<string | null>(null)
 const alarmDrawerOpen = ref(false)
 const activeAlarmId = ref<number | null>(null)
 const reportOpen = ref(false)
@@ -247,9 +248,20 @@ function selectPeerGroup(group: string) {
   void loadPeer(group)
 }
 
-function openMotor(code: string) {
+function openMotor(code: string, at: string | null = null) {
   activeMotorCode.value = code
+  activeAt.value = at
   motorDrawerOpen.value = true
+}
+
+function onSelfPointClick(index: number) {
+  const point = selfSeries.value[index]
+  if (point && motorCode.value) openMotor(motorCode.value, point.ts)
+}
+
+function onTrendPointClick(index: number) {
+  const point = trendSeries.value?.points[index]
+  if (point && motorCode.value) openMotor(motorCode.value, point.ts)
 }
 
 function buildReport() {
@@ -431,6 +443,7 @@ watch(
               :height="330"
               fill
               y2
+              @point-click="onSelfPointClick"
             />
             <div v-else class="chart-empty" style="height: 310px">暂无历史数据</div>
           </div>
@@ -805,6 +818,7 @@ watch(
             :height="340"
             fill
             y2
+            @point-click="onTrendPointClick"
           />
           <div v-else class="chart-empty" style="height: 320px">暂无趋势数据</div>
         </div>
@@ -868,6 +882,7 @@ watch(
     <MotorDetailDrawer
       :open="motorDrawerOpen"
       :code="activeMotorCode"
+      :at="activeAt"
       @close="motorDrawerOpen = false"
     />
     <AlarmDetailDrawer

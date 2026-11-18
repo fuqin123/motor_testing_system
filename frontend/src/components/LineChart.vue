@@ -62,6 +62,8 @@ const props = withDefaults(
   },
 )
 
+const emit = defineEmits<{ 'point-click': [index: number] }>()
+
 const el = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
 let observer: ResizeObserver | null = null
@@ -297,6 +299,26 @@ onMounted(() => {
   })
   observer = new ResizeObserver(() => chart?.resize())
   observer.observe(el.value)
+  chart.getZr().on('click', (event) => {
+    if (!props.labels.length) return
+    const gridLeft = 48
+    const gridRight = props.y3 ? 90 : props.y2 ? 54 : 20
+    const gridTop = 24
+    const gridBottom = 32
+    const width = chart?.getWidth() || 0
+    const height = chart?.getHeight() || 0
+    if (
+      event.offsetX < gridLeft ||
+      event.offsetX > width - gridRight ||
+      event.offsetY < gridTop ||
+      event.offsetY > height - gridBottom
+    ) {
+      return
+    }
+    const ratio = (event.offsetX - gridLeft) / Math.max(1, width - gridLeft - gridRight)
+    const index = Math.round(ratio * (props.labels.length - 1))
+    if (index >= 0 && index < props.labels.length) emit('point-click', index)
+  })
   render()
 })
 

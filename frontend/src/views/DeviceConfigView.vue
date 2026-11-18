@@ -692,16 +692,6 @@ onMounted(() => void load())
             step="0.1"
         /></label>
         <label class="form-field"
-          ><span class="form-label">温度偏离 %</span
-          ><input
-            v-model.number="motorForm.temp_deviation_pct"
-            type="number"
-            class="input"
-            min="0"
-            max="100"
-            step="0.5"
-        /></label>
-        <label class="form-field"
           ><span class="form-label">电流偏离 %</span
           ><input
             v-model.number="motorForm.current_deviation_pct"

@@ -35,12 +35,10 @@ function snapshot(motor: ThresholdMotor): string {
   return JSON.stringify({
     temp_limit_c: motor.temp_limit_c,
     current_limit_a: motor.current_limit_a,
-    temp_deviation_pct: motor.temp_deviation_pct,
     current_deviation_pct: motor.current_deviation_pct,
     phase_imbalance_pct: motor.phase_imbalance_pct,
     vibration_limit_mm_s: motor.vibration_limit_mm_s,
     vibration_deviation_pct: motor.vibration_deviation_pct,
-    temp_notify_base_c: motor.temp_notify_base_c,
     temp_confirm_count: motor.temp_confirm_count,
     current_confirm_count: motor.current_confirm_count,
     notify_enabled: motor.notify_enabled,
@@ -140,12 +138,10 @@ async function saveAll() {
       await api.updateThresholds(motor.code, {
         temp_limit_c: motor.temp_limit_c,
         current_limit_a: motor.current_limit_a,
-        temp_deviation_pct: motor.temp_deviation_pct,
         current_deviation_pct: motor.current_deviation_pct,
         phase_imbalance_pct: motor.phase_imbalance_pct,
         vibration_limit_mm_s: motor.vibration_limit_mm_s,
         vibration_deviation_pct: motor.vibration_deviation_pct,
-        temp_notify_base_c: motor.temp_notify_base_c,
         temp_confirm_count: motor.temp_confirm_count,
         current_confirm_count: motor.current_confirm_count,
         notify_enabled: motor.notify_enabled,
@@ -207,8 +203,8 @@ onMounted(() => void load())
               <h3>阈值配置</h3>
               <div class="right"><span class="badge mut">超过上限即触发飞书提醒</span></div>
               <div class="sub">
-                温度上限 / 单相电流上限 / 三相不平衡 / 振动上限 / 温度通知下限 /
-                连续确认次数 · 修改后点击底部保存
+                温度上限 / 单相电流上限 / 三相不平衡 / 振动上限 / 连续确认次数 ·
+                修改后点击底部保存
               </div>
             </div>
             <div v-for="motor in thresholdMotors" :key="motor.code" class="settings-motor-block">
@@ -259,20 +255,6 @@ onMounted(() => void load())
                 </div>
                 <div class="settings-two-col">
                   <div class="settings-slider">
-                    <span class="k">温度偏离基线</span>
-                    <input
-                      v-model.number="motor.temp_deviation_pct"
-                      type="number"
-                      class="input"
-                      min="0"
-                      max="100"
-                      step="0.5"
-                      style="width: 90px"
-                      @input="markDirty"
-                    />
-                    <span style="font-size: 12px; color: var(--faint)">%</span>
-                  </div>
-                  <div class="settings-slider">
                     <span class="k">三相不平衡</span>
                     <input
                       v-model.number="motor.phase_imbalance_pct"
@@ -315,20 +297,6 @@ onMounted(() => void load())
                     <span style="font-size: 12px; color: var(--faint)">%</span>
                   </div>
                   <div class="settings-slider">
-                    <span class="k">温度通知下限</span>
-                    <input
-                      v-model.number="motor.temp_notify_base_c"
-                      type="number"
-                      class="input"
-                      min="0"
-                      max="200"
-                      step="0.5"
-                      style="width: 90px"
-                      @input="markDirty"
-                    />
-                    <span style="font-size: 12px; color: var(--faint)">°C</span>
-                  </div>
-                  <div class="settings-slider">
                     <span class="k">温度连续次数</span>
                     <input
                       v-model.number="motor.temp_confirm_count"
@@ -358,8 +326,8 @@ onMounted(() => void load())
                   </div>
                 </div>
                 <p class="settings-note" style="padding: 4px 0 0">
-                  温度通知下限低于该温度时不发送温度偏离通知，建议设为工作温度下限（如
-                  40°C）；温度/电流连续次数用于过滤加卸载、频率调整和电压波动造成的单次异常。
+                  温度告警只看温度上限，低于上限不通知，避免启停和加卸载过程误报；
+                  温度/电流连续次数用于复采确认，过滤频率调整和电压波动造成的单次异常。
                 </p>
 
                 <div class="state-config">
@@ -427,8 +395,8 @@ onMounted(() => void load())
                       <input v-model.number="motor.state_off_vibration_mm_s" type="number" class="input" min="0" step="0.01" @input="markDirty" />
                     </div>
                     <p class="state-note">
-                      偏离判断优先使用当前状态的正常值；状态切换当次不触发偏离、温升、电流/振动越限通知，
-                      避免启停瞬间的大幅波动误报。温度上限等安全阈值仍持续生效。
+                      电流/振动偏离判断优先使用当前状态的正常值；温度告警只看温度上限，温度正常值仅作参考。
+                      状态切换当次不触发偏离和电流/振动越限通知，避免启停瞬间的大幅波动误报。
                     </p>
                   </details>
                 </div>

@@ -70,14 +70,15 @@ export const api = {
     request<{ items: MotorCard[]; total: number }>(
       `/motors${query({ include_disabled: includeDisabled ? 'true' : undefined })}`,
     ),
-  motor: (code: string, date?: string) =>
+  motor: (code: string, date?: string, at?: string) =>
     request<{
       motor: MotorCard
       sensors: import('./types').SensorInfo[]
       baseline: import('./types').Baseline | null
       recent_alarms: Alarm[]
-    }>(`/motors/${encodeURIComponent(code)}${query({ date })}`),
-  motorSeries: (code: string, range: string, date?: string) =>
+      as_of?: string
+    }>(`/motors/${encodeURIComponent(code)}${query({ date, at })}`),
+  motorSeries: (code: string, range: string, date?: string, at?: string) =>
     request<{
       motor_code: string
       range: string
@@ -85,7 +86,8 @@ export const api = {
       points: SeriesPoint[]
       date?: string
       is_today?: boolean
-    }>(`/motors/${encodeURIComponent(code)}/series${query({ range, date })}`),
+      as_of?: string
+    }>(`/motors/${encodeURIComponent(code)}/series${query({ range, date, at })}`),
   selfAnalysis: (motorCode: string, range = '30d', date?: string) =>
     request<SelfAnalysis>(`/analysis/self${query({ motor_id: motorCode, range, date })}`),
   peers: (group?: string, date?: string) =>
@@ -199,7 +201,6 @@ export interface ThresholdResponse {
   phase_imbalance_pct: number
   vibration_limit_mm_s: number
   vibration_deviation_pct: number
-  temp_notify_base_c: number
   temp_confirm_count: number
   current_confirm_count: number
   rise_rate_limit_c_per_day: number

@@ -21,7 +21,12 @@ import {
   timeAgo,
 } from '@/utils/format'
 
-const props = defineProps<{ open: boolean; code: string | null; date?: string | null }>()
+const props = defineProps<{
+  open: boolean
+  code: string | null
+  date?: string | null
+  at?: string | null
+}>()
 const emit = defineEmits<{ close: []; analysis: [code: string] }>()
 const router = useRouter()
 const ui = useUiStore()
@@ -40,9 +45,10 @@ async function load() {
   loading.value = true
   try {
     const date = props.date || undefined
+    const at = props.at || undefined
     const [motorDetail, trend] = await Promise.all([
-      api.motor(props.code, date),
-      api.motorSeries(props.code, '24h', date),
+      api.motor(props.code, date, at),
+      api.motorSeries(props.code, '24h', date, at),
     ])
     detail.value = motorDetail
     series.value = trend.points
@@ -54,7 +60,7 @@ async function load() {
 }
 
 watch(
-  () => [props.open, props.code, props.date],
+  () => [props.open, props.code, props.date, props.at],
   () => {
     if (props.open && props.code) void load()
   },
@@ -109,7 +115,7 @@ function goAnalysis() {
     :title="motor ? `${motor.name}` : '电机详情'"
     :subtitle="
       motor
-        ? `${motor.code} · ${motor.location} · ${motor.rated_kw} kW · ${motor.group}${props.date ? ` · 历史 ${props.date}` : ''}`
+        ? `${motor.code} · ${motor.location} · ${motor.rated_kw} kW · ${motor.group}${props.at ? ` · 历史时刻 ${dateTime(props.at)}` : props.date ? ` · 历史 ${props.date}` : ''}`
         : ''
     "
     @close="emit('close')"

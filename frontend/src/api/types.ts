@@ -177,6 +177,8 @@ export interface TrendSeries {
   motor_code: string | null
   date?: string
   is_today?: boolean
+  window_start?: string
+  window_end?: string
 }
 
 export interface Baseline {
@@ -366,7 +368,6 @@ export interface ThresholdMotor {
   phase_imbalance_pct: number
   vibration_limit_mm_s: number
   vibration_deviation_pct: number
-  temp_notify_base_c: number
   temp_confirm_count: number
   current_confirm_count: number
   rise_rate_limit_c_per_day: number
