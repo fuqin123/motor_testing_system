@@ -52,7 +52,7 @@ class CycleSummary:
         }
 
 
-def load_gateway_plans(db) -> list[GatewayPlan]:
+def load_gateway_plans(db, motor_ids: set[int] | None = None) -> list[GatewayPlan]:
     gateways = list(
         db.scalars(select(Gateway).where(Gateway.enabled.is_(True)).order_by(Gateway.code)).all()
     )
@@ -76,6 +76,7 @@ def load_gateway_plans(db) -> list[GatewayPlan]:
             Sensor.gateway_id.in_(list(plans)),
             Motor.enabled.is_(True),
         )
+        .where(Sensor.motor_id.in_(motor_ids) if motor_ids is not None else True)
         .order_by(Sensor.id)
     ).all()
     latest_map = latest_readings(db, list({motor.id for _, motor in rows}))
@@ -328,6 +329,19 @@ def persist_cycle(
     )
 
 
+def _pending_recheck_motor_ids(db) -> set[int]:
+    return set(
+        db.scalars(
+            select(AlarmStreak.motor_id)
+            .where(
+                AlarmStreak.count > 0,
+                AlarmStreak.rule_key.in_(CONFIRM_RULE_KEYS),
+            )
+            .distinct()
+        ).all()
+    )
+
+
 def pending_recheck_at() -> datetime | None:
     with SessionLocal() as db:
         last_ts = db.scalar(
@@ -343,12 +357,15 @@ def pending_recheck_at() -> datetime | None:
 
 
 def run_poll_cycle(
-    ts: datetime | None = None, bucket_minutes: int | None = None
+    ts: datetime | None = None,
+    bucket_minutes: int | None = None,
+    recheck: bool = False,
 ) -> CycleSummary:
     interval = bucket_minutes or settings.poll_interval_minutes
     cycle_ts = floor_bucket(as_utc(ts or utcnow()) or utcnow(), interval)
     with SessionLocal() as db:
-        plans = load_gateway_plans(db)
+        motor_ids = _pending_recheck_motor_ids(db) if recheck else None
+        plans = load_gateway_plans(db, motor_ids=motor_ids)
     if not plans:
         now = utcnow()
         logger.warning("没有启用的网关或采集点，跳过本轮采集")
@@ -420,7 +437,8 @@ class CollectorService(threading.Thread):
         self._update(running=True, last_started_at=iso(started), last_error=None, rechecking=recheck)
         try:
             summary = run_poll_cycle(
-                bucket_minutes=settings.alarm_recheck_interval_minutes if recheck else None
+                bucket_minutes=settings.alarm_recheck_interval_minutes if recheck else None,
+                recheck=recheck,
             )
             self._update(last_cycle=summary.to_dict(), running=False, rechecking=False)
             if self._last_cleanup is None or (started - self._last_cleanup) > timedelta(hours=24):
