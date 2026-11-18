@@ -1,6 +1,6 @@
 # API 接口文档
 
-> 版本：v0.6.0 · 2026-11-17
+> 版本：v0.7.0 · 2026-11-18
 > Base URL：`http://<host>:8000/api/v1`
 > 在线文档：`/api/docs`（Swagger UI）· `/api/redoc` · `/api/openapi.json`
 
@@ -21,6 +21,8 @@
 - `Content-Type: application/json; charset=utf-8`
 - 时间：ISO 8601 UTC，例如 `"2026-11-12T06:30:00Z"`；前端本地化为北京时间。
 - **日期回看**：总览、趋势、分析、电机详情/序列支持 `date=YYYY-MM-DD`（Asia/Shanghai）；省略表示今天/实时，历史日期以所选日结束时刻为 `as_of`，只使用该时刻之前的数据。
+- **精确时刻**：电机详情/序列额外支持 `at=ISO 8601`，用于点击趋势点查看该时刻；`at` 优先于 `date`。
+- **24 小时窗口**：`range=24h` 使用所选日期的本地自然日 00:00 起至 `as_of`，不再滚动最近 24 小时。
 - 数值单位：温度 `°C`，电流 `A`，振动 `mm/s`，偏离 `%`，温升 `°C/天`。
 - 运行状态：`running` 工作、`standby` 待机、`off` 关机、`unknown` 未知；由电流和电机状态阈值判定。
 - 错误格式：
@@ -265,7 +267,7 @@
 
 `GET /dashboard/trend?range=24h|7d|30d&motor_id=M-03&date=2026-11-12`
 
-`motor_id` 省略时返回全部启用电机均值。
+`motor_id` 省略时返回全部启用电机均值（接口兼容保留；v0.7 前端总览已改为单电机趋势）。
 
 ```json
 {
@@ -322,7 +324,7 @@
 
 ### 4.2 电机详情
 
-`GET /motors/{code}?date=2026-11-12`
+`GET /motors/{code}?date=2026-11-12` 或 `GET /motors/{code}?at=2026-11-12T06:15:00Z`
 
 ```json
 {
@@ -352,7 +354,7 @@
 
 ### 4.3 历史序列
 
-`GET /motors/{code}/series?range=24h|7d|30d&date=2026-11-12`
+`GET /motors/{code}/series?range=24h|7d|30d&date=2026-11-12`，或追加 `&at=2026-11-12T06:15:00Z` 查看该时刻前 24 小时。
 
 返回 `{motor_code, range, bucket_minutes, points[]}`，`points` 结构同 3.2。
 
@@ -373,8 +375,7 @@
   "phase_imbalance_pct": 10,
   "vibration_limit_mm_s": 4.5,
   "vibration_deviation_pct": 30,
-  "temp_notify_base_c": 40,
-  "temp_confirm_count": 2,
+  "temp_confirm_count": 3,
   "current_confirm_count": 2,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true,
@@ -405,8 +406,7 @@
   "phase_imbalance_pct": 10.0,
   "vibration_limit_mm_s": 4.5,
   "vibration_deviation_pct": 30.0,
-  "temp_notify_base_c": 40.0,
-  "temp_confirm_count": 2,
+  "temp_confirm_count": 3,
   "current_confirm_count": 2,
   "rise_rate_limit_c_per_day": 1.0,
   "notify_enabled": true,
@@ -434,8 +434,8 @@
 - `state_running_current_a` / `state_running_temp_c` / `state_running_vibration_mm_s`：工作状态正常值。
 - `state_standby_*`、`state_off_*`：待机、关机状态正常值。
 - 正常值留 0 表示该状态不使用该项；待机/关机不会回退到工作基线。状态切换当次不触发偏离、电流不平衡、电流/振动越限，温度硬上限仍生效。
-- `temp_notify_base_c`：温度低于该值时不发送温度偏离通知，默认 40°C；可按现场工作温度下限调整。
-- `temp_confirm_count` / `current_confirm_count`：温度/电流类异常连续命中次数，范围 1–10，默认 2。
+- `temp_confirm_count` / `current_confirm_count`：温度/电流类异常连续命中次数，范围 1–10，默认 3；首次命中后按 5 分钟复采。
+- 温度告警只看 `temp_limit_c`，低于上限不产生通知；`temp_deviation_pct` / `temp_notify_base_c` 字段保留兼容，不再驱动温度通知。
 - 温升速率已从阈值/通知规则移除；`rise_rate_limit_c_per_day` 字段保留用于兼容，不再产生 `temp_rise` 告警。
 
 ### 4.5 新增/更新电机
@@ -855,8 +855,7 @@
       "phase_imbalance_pct": 10,
       "vibration_limit_mm_s": 4.5,
       "vibration_deviation_pct": 30,
-      "temp_notify_base_c": 40.0,
-      "temp_confirm_count": 2,
+      "temp_confirm_count": 3,
       "current_confirm_count": 2,
       "rise_rate_limit_c_per_day": 1.0,
       "notify_enabled": true,
