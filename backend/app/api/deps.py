@@ -1,5 +1,9 @@
+from datetime import datetime
+
 from fastapi import HTTPException, Query
 from sqlalchemy.orm import Session
+
+from app.core.time import as_utc
 
 from app.core.security import UserContext, get_current_user
 from app.db.models import AuditLog
@@ -14,6 +18,7 @@ __all__ = [
     "audit",
     "get_current_user",
     "get_date_view",
+    "get_at_time",
     "get_db",
 ]
 
@@ -28,6 +33,24 @@ def get_date_view(
         return resolve_date_view(date)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def get_at_time(
+    at: str | None = Query(
+        default=None,
+        description="精确时刻 ISO 8601，用于点击趋势点查看该时刻详情",
+    )
+) -> datetime | None:
+    if not at:
+        return None
+    try:
+        value = datetime.fromisoformat(at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="at 时间格式应为 ISO 8601") from exc
+    result = as_utc(value)
+    if result is None:
+        raise HTTPException(status_code=422, detail="at 时间格式应为 ISO 8601")
+    return result
 
 
 def audit(

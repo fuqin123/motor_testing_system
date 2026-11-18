@@ -204,8 +204,8 @@ def seed_demo(reset: bool = False) -> bool:
                 phase_imbalance_pct=10.0,
                 vibration_limit_mm_s=4.5,
                 temp_notify_base_c=40.0,
-                temp_confirm_count=2,
-                current_confirm_count=2,
+                temp_confirm_count=3,
+                current_confirm_count=3,
                 rise_rate_limit_c_per_day=1.0,
                 notify_enabled=True,
             )

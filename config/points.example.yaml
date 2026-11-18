@@ -32,8 +32,8 @@ motors:
     # 温度低于该值时不做偏离通知；0 表示不启用
     temp_notify_base_c: 40
     # 温度/电流连续超过设定次数后才生成告警并通知
-    temp_confirm_count: 2
-    current_confirm_count: 2
+    temp_confirm_count: 3
+    current_confirm_count: 3
     # 运行状态：关机 ≤ off_current_max；工作 ≥ running_current_min；中间为待机
     off_current_max_a: 1.0
     running_current_min_a: 30

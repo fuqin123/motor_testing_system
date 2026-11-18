@@ -5,13 +5,14 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from app.core.config import settings
 from app.core.time import as_utc, floor_bucket, iso, next_poll_time, utcnow
-from app.db.models import Gateway, Motor, PollCycle, Reading, Sensor
+from app.db.models import AlarmStreak, Gateway, Motor, PollCycle, Reading, Sensor
 from app.db.session import SessionLocal
 from app.services.alarms import (
+    CONFIRM_RULE_KEYS,
     apply_reading_alarms,
     evaluate_rules,
     handle_gateway_result,
@@ -327,8 +328,25 @@ def persist_cycle(
     )
 
 
-def run_poll_cycle(ts: datetime | None = None) -> CycleSummary:
-    cycle_ts = floor_bucket(as_utc(ts or utcnow()) or utcnow(), settings.poll_interval_minutes)
+def pending_recheck_at() -> datetime | None:
+    with SessionLocal() as db:
+        last_ts = db.scalar(
+            select(func.min(AlarmStreak.last_ts)).where(
+                AlarmStreak.count > 0,
+                AlarmStreak.rule_key.in_(CONFIRM_RULE_KEYS),
+            )
+        )
+    last = as_utc(last_ts)
+    if last is None:
+        return None
+    return last + timedelta(minutes=settings.alarm_recheck_interval_minutes)
+
+
+def run_poll_cycle(
+    ts: datetime | None = None, bucket_minutes: int | None = None
+) -> CycleSummary:
+    interval = bucket_minutes or settings.poll_interval_minutes
+    cycle_ts = floor_bucket(as_utc(ts or utcnow()) or utcnow(), interval)
     with SessionLocal() as db:
         plans = load_gateway_plans(db)
     if not plans:
@@ -377,6 +395,7 @@ class CollectorService(threading.Thread):
             "mode": settings.collector_mode,
         }
         self._last_cleanup: datetime | None = None
+        self._next_recheck_at: datetime | None = None
 
     def _update(self, **values) -> None:
         with self._status_lock:
@@ -396,28 +415,41 @@ class CollectorService(threading.Thread):
         self._stop_event.set()
         self._force_event.set()
 
-    def _run_once(self) -> None:
+    def _run_once(self, recheck: bool = False) -> None:
         started = utcnow()
-        self._update(running=True, last_started_at=iso(started), last_error=None)
+        self._update(running=True, last_started_at=iso(started), last_error=None, rechecking=recheck)
         try:
-            summary = run_poll_cycle()
-            self._update(last_cycle=summary.to_dict(), running=False)
+            summary = run_poll_cycle(
+                bucket_minutes=settings.alarm_recheck_interval_minutes if recheck else None
+            )
+            self._update(last_cycle=summary.to_dict(), running=False, rechecking=False)
             if self._last_cleanup is None or (started - self._last_cleanup) > timedelta(hours=24):
                 cleanup_old_data()
                 self._last_cleanup = started
         except Exception as exc:
             logger.exception("采集周期异常")
-            self._update(running=False, last_error=str(exc)[:255])
+            self._update(running=False, rechecking=False, last_error=str(exc)[:255])
         finally:
             self._update(last_finished_at=iso(utcnow()))
+
+    def _refresh_recheck(self) -> None:
+        self._next_recheck_at = pending_recheck_at()
+        self._update(
+            next_recheck_at=iso(self._next_recheck_at) if self._next_recheck_at else None
+        )
 
     def run(self) -> None:
         self._update(thread_alive=True)
         try:
             if settings.poll_on_start:
                 self._run_once()
+            self._refresh_recheck()
             while not self._stop_event.is_set():
-                next_run = next_poll_time(utcnow(), settings.poll_interval_minutes)
+                normal_next = next_poll_time(utcnow(), settings.poll_interval_minutes)
+                recheck = bool(
+                    self._next_recheck_at and self._next_recheck_at < normal_next
+                )
+                next_run = self._next_recheck_at if recheck else normal_next
                 self._update(next_run_at=iso(next_run))
                 rescheduled = False
                 while not self._stop_event.is_set():
@@ -436,7 +468,9 @@ class CollectorService(threading.Thread):
                 if self._force_event.is_set():
                     self._force_event.clear()
                     logger.info("收到手动召测请求")
-                self._run_once()
+                    recheck = False
+                self._run_once(recheck=recheck)
+                self._refresh_recheck()
         finally:
             self._update(thread_alive=False, running=False)
 

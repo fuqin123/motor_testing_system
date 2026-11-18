@@ -14,6 +14,7 @@ from app.services.settings import choose_owner
 from app.services.telemetry import OPERATING_STATE_TEXT, classify_operating_state
 
 ACTIVE_STATUSES = ("open", "ack")
+CONFIRM_RULE_KEYS = ("temp_high", "current_high", "current_deviation", "current_imbalance")
 
 
 @dataclass
@@ -83,35 +84,6 @@ def evaluate_rules(
                     advice="优先检查风道散热、轴承润滑与端盖温升，安排红外测温复核。",
                 )
             )
-        elif not state_changed:
-            notify_base = float(getattr(motor, "temp_notify_base_c", 0.0) or 0.0)
-            if notify_base > 0 and temperature_c < notify_base:
-                temp_ref = None
-            else:
-                temp_ref = ref_or_baseline("temp_c", baseline.temp_median if baseline else None)
-            temp_dev = deviation_pct(temperature_c, temp_ref)
-            if temp_dev is not None and temp_dev >= motor.temp_deviation_pct:
-                ref_label = (
-                    f"{state_text}状态正常值"
-                    if state_ref("temp_c") is not None
-                    else "近 30 天正常基线"
-                )
-                candidates.append(
-                    AlarmCandidate(
-                        level="warn",
-                        rule_key="temp_deviation",
-                        title=f"温度高于{state_text}状态基准",
-                        description=(
-                            f"外壳温度较 {motor.code} {ref_label}偏高 {temp_dev:.1f}%，"
-                            f"当前 {temperature_c:.1f}°C，基准 {temp_ref:.1f}°C。"
-                        ),
-                        metric="temp_deviation_pct",
-                        value=temp_dev,
-                        threshold=motor.temp_deviation_pct,
-                        unit="%",
-                        advice="对比同类电机与环境温度，检查散热风道、滤网及润滑状态。",
-                    )
-                )
 
     phases = [value for value in (current_a, current_b, current_c) if value is not None]
     peak_current = max(phases) if phases else current_avg_a
@@ -323,7 +295,7 @@ def apply_reading_alarms(
             if last_ts is None:
                 streak.count = 1
             elif last_ts < now:
-                interval_seconds = max(60, settings.poll_interval_minutes * 60)
+                interval_seconds = max(60, settings.poll_interval_minutes * 60, settings.alarm_recheck_interval_minutes * 60)
                 if now - last_ts > timedelta(seconds=interval_seconds * 1.5):
                     streak.count = 1
                 else:

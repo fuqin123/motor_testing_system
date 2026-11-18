@@ -6,7 +6,7 @@ from statistics import mean
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.time import as_utc, floor_bucket, iso, local_zone, utcnow
+from app.core.time import as_utc, floor_bucket, iso, local_day_bounds_utc, local_zone, utcnow
 from app.db.models import Alarm, Motor, Reading
 from app.services.baseline import Baseline, band_values, compute_baseline, deviation_pct
 from app.services.telemetry import latest_readings, load_pct, motor_status, series_readings
@@ -56,13 +56,21 @@ def bucket_readings(readings: list[Reading], bucket_minutes: int) -> list[dict]:
     return points
 
 
+def range_start(now: datetime, range_key: str) -> datetime:
+    if range_key == "24h":
+        local_day = now.astimezone(local_zone()).date()
+        day_start, _ = local_day_bounds_utc(local_day)
+        return day_start
+    return now - timedelta(hours=RANGE_CONFIG[range_key]["hours"])
+
+
 def build_series(
     db: Session, motor: Motor, range_key: str, now: datetime | None = None
 ) -> list[dict]:
     config = RANGE_CONFIG[range_key]
     now = as_utc(now or utcnow())
     assert now is not None
-    readings = series_readings(db, motor.id, now - timedelta(hours=config["hours"]), now)
+    readings = series_readings(db, motor.id, range_start(now, range_key), now)
     return bucket_readings(readings, config["bucket_minutes"])
 
 

@@ -67,7 +67,6 @@ def get_settings(
                 "phase_imbalance_pct": motor.phase_imbalance_pct,
                 "vibration_limit_mm_s": motor.vibration_limit_mm_s,
                 "vibration_deviation_pct": motor.vibration_deviation_pct,
-                "temp_notify_base_c": motor.temp_notify_base_c,
                 "temp_confirm_count": motor.temp_confirm_count,
                 "current_confirm_count": motor.current_confirm_count,
                 "rise_rate_limit_c_per_day": motor.rise_rate_limit_c_per_day,

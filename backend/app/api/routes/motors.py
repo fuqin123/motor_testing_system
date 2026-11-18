@@ -1,11 +1,13 @@
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import DateView, audit, get_current_user, get_date_view, get_db
+from app.api.deps import DateView, audit, get_at_time, get_current_user, get_date_view, get_db
 from app.api.serializers import alarm_dict, motor_card, sensor_dict
 from app.core.security import UserContext
-from app.core.time import utcnow
+from app.core.time import iso, utcnow
 from app.db.models import Alarm, Motor
 from app.schemas import MotorUpsert, ThresholdUpdate
 from app.services.analysis import RANGE_CONFIG, build_series, normalize_range
@@ -98,14 +100,29 @@ def upsert_motor(
 def get_motor(
     code: str,
     view: DateView = Depends(get_date_view),
+    at: datetime | None = Depends(get_at_time),
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ) -> dict:
-    now = view.as_of
+    now = at or view.as_of
     motor = _get_motor(db, code)
     latest_map = latest_readings(db, [motor.id], until=now)
     recent_map = recent_readings_map(db, [motor.id], limit=26, until=now)
-    if view.is_today:
+    if at is not None:
+        recent_alarms = list(
+            db.scalars(
+                select(Alarm)
+                .where(
+                    Alarm.motor_code == code,
+                    Alarm.triggered_at <= at,
+                    Alarm.triggered_at >= at - timedelta(hours=24),
+                )
+                .order_by(Alarm.triggered_at.desc())
+                .limit(10)
+            ).all()
+        )
+        alarm_map = {code: recent_alarms}
+    elif view.is_today:
         alarm_map = active_alarms_by_motor(db)
         recent_alarms = db.scalars(
             select(Alarm)
@@ -136,6 +153,7 @@ def get_motor(
         "sensors": [sensor_dict(sensor) for sensor in motor.sensors],
         "baseline": baseline.to_dict() if baseline else None,
         "recent_alarms": [alarm_dict(alarm) for alarm in recent_alarms],
+        "as_of": iso(now),
     }
 
 
@@ -144,18 +162,21 @@ def motor_series(
     code: str,
     range_key: str = Query(default="24h", alias="range"),
     view: DateView = Depends(get_date_view),
+    at: datetime | None = Depends(get_at_time),
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ) -> dict:
     motor = _get_motor(db, code)
     normalized = normalize_range(range_key)
-    points = build_series(db, motor, normalized, view.as_of)
+    end = at or view.as_of
+    points = build_series(db, motor, normalized, end)
     return {
         "motor_code": motor.code,
         "range": normalized,
         "bucket_minutes": RANGE_CONFIG[normalized]["bucket_minutes"],
         "date": view.date_text,
         "is_today": view.is_today,
+        "as_of": iso(end),
         "points": points,
     }
 

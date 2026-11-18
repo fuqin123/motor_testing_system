@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -16,6 +14,7 @@ from app.services.analysis import (
     build_series,
     motor_summary,
     normalize_range,
+    range_start,
 )
 from app.services.baseline import compute_baseline, deviation_pct
 from app.services.collector import get_collector
@@ -59,12 +58,14 @@ def dashboard_trend(
     normalized = normalize_range(range_key)
     config = RANGE_CONFIG[normalized]
     end = view.as_of
-    since = end - timedelta(hours=config["hours"])
+    since = range_start(end, normalized)
     response_meta = {
         "range": normalized,
         "bucket_minutes": config["bucket_minutes"],
         "date": view.date_text,
         "is_today": view.is_today,
+        "window_start": iso(since),
+        "window_end": iso(end),
     }
 
     if motor_id:
