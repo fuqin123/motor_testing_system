@@ -196,6 +196,7 @@ export interface ThresholdResponse {
   code: string
   temp_limit_c: number
   current_limit_a: number
+  overload_pct: number
   temp_deviation_pct: number
   current_deviation_pct: number
   phase_imbalance_pct: number

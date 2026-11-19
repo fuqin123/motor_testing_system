@@ -35,6 +35,7 @@ function snapshot(motor: ThresholdMotor): string {
   return JSON.stringify({
     temp_limit_c: motor.temp_limit_c,
     current_limit_a: motor.current_limit_a,
+    overload_pct: motor.overload_pct,
     current_deviation_pct: motor.current_deviation_pct,
     phase_imbalance_pct: motor.phase_imbalance_pct,
     vibration_limit_mm_s: motor.vibration_limit_mm_s,
@@ -138,6 +139,7 @@ async function saveAll() {
       await api.updateThresholds(motor.code, {
         temp_limit_c: motor.temp_limit_c,
         current_limit_a: motor.current_limit_a,
+        overload_pct: motor.overload_pct,
         current_deviation_pct: motor.current_deviation_pct,
         phase_imbalance_pct: motor.phase_imbalance_pct,
         vibration_limit_mm_s: motor.vibration_limit_mm_s,
@@ -203,7 +205,7 @@ onMounted(() => void load())
               <h3>阈值配置</h3>
               <div class="right"><span class="badge mut">超过上限即触发飞书提醒</span></div>
               <div class="sub">
-                温度上限 / 单相电流上限 / 三相不平衡 / 振动上限 / 连续确认次数 ·
+                温度上限 / 单相电流上限 / 过载偏离 / 三相不平衡 / 振动上限 / 连续确认次数 ·
                 修改后点击底部保存
               </div>
             </div>
@@ -254,6 +256,20 @@ onMounted(() => void load())
                   <span class="range-val">{{ Math.round(motor.current_limit_a) }} A</span>
                 </div>
                 <div class="settings-two-col">
+                  <div class="settings-slider">
+                    <span class="k">过载偏离</span>
+                    <input
+                      v-model.number="motor.overload_pct"
+                      type="number"
+                      class="input"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      style="width: 90px"
+                      @input="markDirty"
+                    />
+                    <span style="font-size: 12px; color: var(--faint)">%</span>
+                  </div>
                   <div class="settings-slider">
                     <span class="k">三相不平衡</span>
                     <input
@@ -326,8 +342,8 @@ onMounted(() => void load())
                   </div>
                 </div>
                 <p class="settings-note" style="padding: 4px 0 0">
-                  温度告警只看温度上限，低于上限不通知，避免启停和加卸载过程误报；
-                  温度/电流连续次数用于复采确认，过滤频率调整和电压波动造成的单次异常。
+                  温度/电流告警按“上限 × (1 + 过载偏离)”判断，低于触发线不通知；例如上限 600
+                  A、过载偏离 10% 时，660 A 才通知。连续次数用于 5 分钟复采确认，过滤单次波动。
                 </p>
 
                 <div class="state-config">
