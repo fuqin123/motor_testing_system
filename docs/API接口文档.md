@@ -1,6 +1,6 @@
 # API 接口文档
 
-> 版本：v0.7.0 · 2026-11-18
+> 版本：v0.7.1 · 2026-11-18
 > Base URL：`http://<host>:8000/api/v1`
 > 在线文档：`/api/docs`（Swagger UI）· `/api/redoc` · `/api/openapi.json`
 
@@ -24,6 +24,7 @@
 - **精确时刻**：电机详情/序列额外支持 `at=ISO 8601`，用于点击趋势点查看该时刻；`at` 优先于 `date`。
 - **24 小时窗口**：`range=24h` 使用所选日期的本地自然日 00:00 起至 `as_of`，不再滚动最近 24 小时。
 - 数值单位：温度 `°C`，电流 `A`，振动 `mm/s`，偏离 `%`，温升 `°C/天`。
+- 电流分析基准为电机额定电流 `rated_current_a`；温度/电流告警触发线为 `上限 × (1 + overload_pct/100)`。
 - 运行状态：`running` 工作、`standby` 待机、`off` 关机、`unknown` 未知；由电流和电机状态阈值判定。
 - 错误格式：
 
@@ -370,6 +371,7 @@
 {
   "temp_limit_c": 85,
   "current_limit_a": 252,
+  "overload_pct": 10,
   "temp_deviation_pct": 8,
   "current_deviation_pct": 10,
   "phase_imbalance_pct": 10,
@@ -401,6 +403,7 @@
   "code": "M-01",
   "temp_limit_c": 85.0,
   "current_limit_a": 252.0,
+  "overload_pct": 10.0,
   "temp_deviation_pct": 8.0,
   "current_deviation_pct": 10.0,
   "phase_imbalance_pct": 10.0,
@@ -434,8 +437,9 @@
 - `state_running_current_a` / `state_running_temp_c` / `state_running_vibration_mm_s`：工作状态正常值。
 - `state_standby_*`、`state_off_*`：待机、关机状态正常值。
 - 正常值留 0 表示该状态不使用该项；待机/关机不会回退到工作基线。状态切换当次不触发偏离、电流不平衡、电流/振动越限，温度硬上限仍生效。
-- `temp_confirm_count` / `current_confirm_count`：温度/电流类异常连续命中次数，范围 1–10，默认 3；首次命中后按 5 分钟复采。
-- 温度告警只看 `temp_limit_c`，低于上限不产生通知；`temp_deviation_pct` / `temp_notify_base_c` 字段保留兼容，不再驱动温度通知。
+- `overload_pct`：过载偏离百分比，默认 10；温度/电流触发线 = 上限 × (1 + 过载偏离/100)，例如 600 A → 660 A 才告警。
+- `temp_confirm_count` / `current_confirm_count`：温度/电流/三相不平衡连续命中次数，范围 1–10，默认 3；首次命中后每 5 分钟复采。
+- 温度低于触发线不处理；`temp_deviation_pct` / `temp_notify_base_c` 字段保留兼容，不再驱动温度通知。
 - 温升速率已从阈值/通知规则移除；`rise_rate_limit_c_per_day` 字段保留用于兼容，不再产生 `temp_rise` 告警。
 
 ### 4.5 新增/更新电机
@@ -850,6 +854,7 @@
       "rated_current_a": 240,
       "temp_limit_c": 85,
       "current_limit_a": 252,
+      "overload_pct": 10,
       "temp_deviation_pct": 8,
       "current_deviation_pct": 10,
       "phase_imbalance_pct": 10,
