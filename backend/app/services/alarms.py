@@ -60,26 +60,23 @@ def evaluate_rules(
         value = float(getattr(motor, f"state_{state}_{metric}", 0.0) or 0.0)
         return value if value > 0 else None
 
-    def ref_or_baseline(metric: str, baseline_value: float | None) -> float | None:
-        ref = state_ref(metric)
-        if ref is not None:
-            return ref
-        return baseline_value if state in ("running", "unknown") else None
-
     if temperature_c is not None:
-        if temperature_c >= motor.temp_limit_c:
+        overload = max(0.0, float(getattr(motor, "overload_pct", 0.0) or 0.0))
+        temp_trigger = motor.temp_limit_c * (1 + overload / 100)
+        if temperature_c >= temp_trigger:
             candidates.append(
                 AlarmCandidate(
                     level="crit",
                     rule_key="temp_high",
-                    title="外壳温度越限",
+                    title="外壳温度过载",
                     description=(
-                        f"温度 {temperature_c:.1f}°C 超过上限 {motor.temp_limit_c:.1f}°C，"
-                        "请立即核查散热、负载与轴承状态。"
+                        f"温度 {temperature_c:.1f}°C 超过上限 {motor.temp_limit_c:.1f}°C"
+                        f"（过载容差 {overload:.1f}%，触发线 {temp_trigger:.1f}°C），"
+                        "请核查散热、负载与轴承状态。"
                     ),
                     metric="temperature_c",
                     value=temperature_c,
-                    threshold=motor.temp_limit_c,
+                    threshold=temp_trigger,
                     unit="°C",
                     advice="优先检查风道散热、轴承润滑与端盖温升，安排红外测温复核。",
                 )
@@ -88,61 +85,34 @@ def evaluate_rules(
     phases = [value for value in (current_a, current_b, current_c) if value is not None]
     peak_current = max(phases) if phases else current_avg_a
     if peak_current is not None and motor.current_limit_a > 0:
-        if peak_current >= motor.current_limit_a:
-            if not state_changed:
-                if len(phases) == 3:
-                    phase_text = (
-                        f"三相电流 A/B/C = {current_a:.1f} / {current_b:.1f} / {current_c:.1f} A"
-                    )
-                    title = "三相电流越限"
-                else:
-                    phase_text = f"运行电流 {peak_current:.1f} A"
-                    title = "运行电流越限"
-                candidates.append(
-                    AlarmCandidate(
-                        level="crit",
-                        rule_key="current_high",
-                        title=title,
-                        description=(
-                            f"{phase_text}，最高相超过上限 {motor.current_limit_a:.1f} A，"
-                            "可能存在过载或单相电气异常。"
-                        ),
-                        metric="current_phase_max_a" if len(phases) == 3 else "current_avg_a",
-                        value=peak_current,
-                        threshold=motor.current_limit_a,
-                        unit="A",
-                        advice="检查三相负载平衡、接线端子、变频器输出与机械阻力。",
-                    )
+        overload = max(0.0, float(getattr(motor, "overload_pct", 0.0) or 0.0))
+        current_trigger = motor.current_limit_a * (1 + overload / 100)
+        if peak_current >= current_trigger and not state_changed:
+            if len(phases) == 3:
+                phase_text = (
+                    f"三相电流 A/B/C = {current_a:.1f} / {current_b:.1f} / {current_c:.1f} A"
                 )
-        elif not state_changed and current_avg_a is not None:
-            current_ref = ref_or_baseline(
-                "current_a", baseline.current_median if baseline else None
+                title = "三相电流过载"
+            else:
+                phase_text = f"运行电流 {peak_current:.1f} A"
+                title = "运行电流过载"
+            candidates.append(
+                AlarmCandidate(
+                    level="crit",
+                    rule_key="current_high",
+                    title=title,
+                    description=(
+                        f"{phase_text}，最高相超过上限 {motor.current_limit_a:.1f} A"
+                        f"（过载容差 {overload:.1f}%，触发线 {current_trigger:.1f} A），"
+                        "可能存在过载或单相电气异常。"
+                    ),
+                    metric="current_phase_max_a" if len(phases) == 3 else "current_avg_a",
+                    value=peak_current,
+                    threshold=current_trigger,
+                    unit="A",
+                    advice="检查三相负载平衡、接线端子、变频器输出与机械阻力。",
+                )
             )
-            current_dev = deviation_pct(current_avg_a, current_ref)
-            if current_dev is not None and abs(current_dev) >= motor.current_deviation_pct:
-                direction = "偏高" if current_dev > 0 else "偏低"
-                ref_label = (
-                    f"{state_text}状态正常值"
-                    if state_ref("current_a") is not None
-                    else "近 30 天正常基线"
-                )
-                candidates.append(
-                    AlarmCandidate(
-                        level="warn",
-                        rule_key="current_deviation",
-                        title=f"电流偏离{state_text}状态基准",
-                        description=(
-                            f"运行电流较 {motor.code} {ref_label}{direction} "
-                            f"{abs(current_dev):.1f}%，当前 {current_avg_a:.1f} A，"
-                            f"基准 {current_ref:.1f} A。"
-                        ),
-                        metric="current_deviation_pct",
-                        value=current_dev,
-                        threshold=motor.current_deviation_pct,
-                        unit="%",
-                        advice="检查负载变化、变频器输出与三相电流平衡。",
-                    )
-                )
 
     if (
         len(phases) == 3

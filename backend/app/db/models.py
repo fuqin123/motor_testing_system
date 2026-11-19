@@ -65,6 +65,7 @@ class Motor(TimestampMixin, Base):
 
     temp_limit_c: Mapped[float] = mapped_column(Float, default=85.0)
     current_limit_a: Mapped[float] = mapped_column(Float, default=0.0)
+    overload_pct: Mapped[float] = mapped_column(Float, default=10.0)
     temp_deviation_pct: Mapped[float] = mapped_column(Float, default=8.0)
     current_deviation_pct: Mapped[float] = mapped_column(Float, default=10.0)
     phase_imbalance_pct: Mapped[float] = mapped_column(Float, default=10.0)

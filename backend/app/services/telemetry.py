@@ -154,14 +154,15 @@ def motor_status(
         return "warn"
     if not is_online(latest, now):
         return "unknown"
+    overload = max(0.0, float(getattr(motor, "overload_pct", 0.0) or 0.0))
     if latest is not None and latest.temperature_c is not None:
-        if latest.temperature_c >= motor.temp_limit_c:
+        if latest.temperature_c >= motor.temp_limit_c * (1 + overload / 100):
             return "crit"
     if (
         latest is not None
         and latest.current_avg_a is not None
         and motor.current_limit_a > 0
-        and latest.current_avg_a >= motor.current_limit_a
+        and latest.current_avg_a >= motor.current_limit_a * (1 + overload / 100)
     ):
         return "crit"
     return "ok"

@@ -200,6 +200,7 @@ def update_thresholds(
         "code": motor.code,
         "temp_limit_c": motor.temp_limit_c,
         "current_limit_a": motor.current_limit_a,
+        "overload_pct": motor.overload_pct,
         "temp_deviation_pct": motor.temp_deviation_pct,
         "current_deviation_pct": motor.current_deviation_pct,
         "phase_imbalance_pct": motor.phase_imbalance_pct,

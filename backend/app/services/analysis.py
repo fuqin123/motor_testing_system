@@ -320,15 +320,19 @@ def _motor_metric(
         if latest and baseline
         else None
     )
+    overload = max(0.0, float(getattr(motor, "overload_pct", 0.0) or 0.0))
     status = "unknown"
     if latest is not None:
         status = "ok"
-        if latest.temperature_c is not None and latest.temperature_c >= motor.temp_limit_c:
+        if (
+            latest.temperature_c is not None
+            and latest.temperature_c >= motor.temp_limit_c * (1 + overload / 100)
+        ):
             status = "crit"
         elif (
             latest.current_avg_a is not None
             and motor.current_limit_a > 0
-            and latest.current_avg_a >= motor.current_limit_a
+            and latest.current_avg_a >= motor.current_limit_a * (1 + overload / 100)
         ):
             status = "crit"
         elif (
@@ -337,10 +341,6 @@ def _motor_metric(
             and latest.vibration_total_mm_s >= motor.vibration_limit_mm_s
         ):
             status = "crit"
-        elif temp_dev is not None and temp_dev >= motor.temp_deviation_pct:
-            status = "warn"
-        elif current_dev is not None and abs(current_dev) >= motor.current_deviation_pct:
-            status = "warn"
     return {
         "code": motor.code,
         "name": motor.name,

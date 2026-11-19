@@ -530,6 +530,9 @@ def import_points(path: str) -> dict:
                     motor.current_limit_a or motor.rated_current_a * 1.05,
                 )
             )
+            motor.overload_pct = float(
+                item.get("overload_pct", motor.overload_pct or 10)
+            )
             motor.temp_deviation_pct = float(
                 item.get("temp_deviation_pct", motor.temp_deviation_pct or 8)
             )

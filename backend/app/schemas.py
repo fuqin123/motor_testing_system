@@ -15,6 +15,7 @@ class BulkCloseRequest(BaseModel):
 class ThresholdUpdate(BaseModel):
     temp_limit_c: float | None = Field(default=None, ge=20, le=200)
     current_limit_a: float | None = Field(default=None, ge=0, le=20000)
+    overload_pct: float | None = Field(default=None, ge=0, le=100)
     temp_deviation_pct: float | None = Field(default=None, ge=0, le=100)
     current_deviation_pct: float | None = Field(default=None, ge=0, le=100)
     phase_imbalance_pct: float | None = Field(default=None, ge=0, le=100)

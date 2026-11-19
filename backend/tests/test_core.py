@@ -111,14 +111,26 @@ def test_alarm_dedup_and_auto_close(db):
         motor_id=motor.id,
         ts=datetime(2026, 1, 1, tzinfo=timezone.utc),
         temperature_c=70,
-        current_avg_a=220,
+        current_a=105,
+        current_b=95,
+        current_c=100,
+        current_avg_a=100,
         quality="ok",
     )
     db.add(reading)
     db.flush()
 
     config = {"owners": ["王工", "李工"], "critical_enabled": True, "warning_enabled": True}
-    candidates = evaluate_rules(motor, 70, 220, baseline_stub(), None)
+    candidates = evaluate_rules(
+        motor,
+        70,
+        100,
+        baseline_stub(),
+        None,
+        current_a=105,
+        current_b=95,
+        current_c=100,
+    )
     assert len(candidates) == 1
     first = apply_reading_alarms(db, motor, reading, candidates, config, now=reading.ts)
     second = apply_reading_alarms(db, motor, reading, candidates, config, now=reading.ts)
@@ -215,13 +227,25 @@ def test_manual_close_suppresses_regeneration(db):
         motor_id=motor.id,
         ts=datetime(2026, 1, 2, tzinfo=timezone.utc),
         temperature_c=70,
-        current_avg_a=220,
+        current_a=105,
+        current_b=95,
+        current_c=100,
+        current_avg_a=100,
         quality="ok",
     )
     db.add(reading)
     db.flush()
     config = {"owners": ["王工"], "critical_enabled": True, "warning_enabled": True}
-    candidates = evaluate_rules(motor, 70, 220, baseline_stub(), None)
+    candidates = evaluate_rules(
+        motor,
+        70,
+        100,
+        baseline_stub(),
+        None,
+        current_a=105,
+        current_b=95,
+        current_c=100,
+    )
     alarms = apply_reading_alarms(db, motor, reading, candidates, config, now=reading.ts)
     assert len(alarms) == 1
     alarms[0].status = "closed"
@@ -597,29 +621,16 @@ def test_operating_state_classification_and_transition_suppression():
     assert "current_high" not in {item.rule_key for item in transition}
     assert "current_deviation" not in {item.rule_key for item in transition}
 
-    standby = evaluate_rules(
+    steady = evaluate_rules(
         motor,
         60.0,
-        8.0,
+        120.0,
         baseline,
         None,
-        operating_state="standby",
-        previous_state="standby",
+        operating_state="running",
+        previous_state="running",
     )
-    assert "current_deviation" in {item.rule_key for item in standby}
-    deviation = next(item for item in standby if item.rule_key == "current_deviation")
-    assert "待机" in deviation.title
-
-    normal = evaluate_rules(
-        motor,
-        32.0,
-        5.0,
-        baseline,
-        None,
-        operating_state="standby",
-        previous_state="standby",
-    )
-    assert "current_deviation" not in {item.rule_key for item in normal}
+    assert "current_high" in {item.rule_key for item in steady}
 
 
 def test_feishu_long_connection_hot_reload(monkeypatch):
@@ -696,6 +707,7 @@ def test_alarm_confirmation_count(db):
         name="连续确认测试",
         rated_current_a=100,
         temp_limit_c=70,
+        overload_pct=0,
         temp_confirm_count=3,
         current_confirm_count=1,
     )
@@ -745,6 +757,7 @@ def test_24h_window_uses_calendar_day_and_recheck_schedule(db):
         name="复采测试",
         rated_current_a=100,
         temp_limit_c=70,
+        overload_pct=0,
         temp_confirm_count=3,
         current_confirm_count=1,
     )
@@ -764,3 +777,19 @@ def test_24h_window_uses_calendar_day_and_recheck_schedule(db):
     db.commit()
     expected = reading.ts + timedelta(minutes=5)
     assert pending_recheck_at() == expected
+
+
+def test_overload_tolerance_applies_to_temperature_and_current():
+    motor = motor_stub()
+    motor.current_limit_a = 600.0
+    motor.temp_limit_c = 60.0
+    motor.overload_pct = 10.0
+    normal = evaluate_rules(motor, 64.0, 650.0, baseline_stub(), None)
+    assert "temp_high" not in {item.rule_key for item in normal}
+    assert "current_high" not in {item.rule_key for item in normal}
+    overloaded = evaluate_rules(motor, 66.0, 660.0, baseline_stub(), None)
+    keys = {item.rule_key for item in overloaded}
+    assert "temp_high" in keys
+    assert "current_high" in keys
+    current = next(item for item in overloaded if item.rule_key == "current_high")
+    assert current.threshold == 660.0

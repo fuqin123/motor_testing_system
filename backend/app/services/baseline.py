@@ -117,11 +117,16 @@ def compute_baseline(
             if lo is not None and hi is not None:
                 temp_profile[bucket] = (lo, hi)
 
+    current_median = (
+        motor.rated_current_a
+        if motor.rated_current_a > 0
+        else percentile(currents, 0.50)
+    )
     baseline = Baseline(
         temp_median=percentile(temps, 0.50),
         temp_p10=percentile(temps, 0.10),
         temp_p90=percentile(temps, 0.90),
-        current_median=percentile(currents, 0.50),
+        current_median=current_median,
         current_p10=percentile(currents, 0.10),
         current_p90=percentile(currents, 0.90),
         sample_count=max(len(temps), len(currents)),
