@@ -1,6 +1,6 @@
 # API 接口文档
 
-> 版本：v0.7.1 · 2026-11-18
+> 版本：v0.7.2 · 2026-11-19
 > Base URL：`http://<host>:8000/api/v1`
 > 在线文档：`/api/docs`（Swagger UI）· `/api/redoc` · `/api/openapi.json`
 
@@ -554,12 +554,15 @@
 ```json
 {
   "points": [
-    { "code": "M-03", "name": "主排风机", "temp_deviation_pct": 18.86, "current_deviation_pct": 4.14, "status": "crit" },
-    { "code": "M-05", "name": "冷却塔风机", "temp_deviation_pct": 4.78, "current_deviation_pct": 17.92, "status": "warn" }
+    { "code": "M-03", "name": "主排风机", "temp_ratio_pct": 103.2, "current_ratio_pct": 64.3, "temp_limit_c": 85, "current_limit_a": 305, "status": "warn" },
+    { "code": "M-05", "name": "冷却塔风机", "temp_ratio_pct": 73.5, "current_ratio_pct": 75.0, "temp_limit_c": 80, "current_limit_a": 147, "status": "ok" }
   ],
-  "thresholds": { "temp_pct": 8.0, "current_pct": 10.0 }
+  "thresholds": { "temp_pct": 100.0, "current_pct": 100.0 }
 }
 ```
+
+- 坐标 = 当前值 / 设定上限 × 100%；均 ≤100% 为正常，单维 >100% 为警告，双维 >100% 为严重。
+- 不再依赖 30 天基线，停机电流为 0 时也不会落入异常象限。
 
 ### 5.4 趋势
 
