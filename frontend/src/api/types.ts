@@ -256,8 +256,10 @@ export interface PeerAnalysis {
 export interface QuadrantPoint {
   code: string
   name: string
-  temp_deviation_pct: number
-  current_deviation_pct: number
+  temp_ratio_pct: number
+  current_ratio_pct: number
+  temp_limit_c: number
+  current_limit_a: number
   status: MotorStatus
 }
 

@@ -258,29 +258,36 @@ const linkStats = computed(() => {
 
 const quadrantInsight = computed(() => {
   const points = quadrant.value?.points || []
+  const bothRisk = points.find(
+    (point) => point.temp_ratio_pct > 100 && point.current_ratio_pct > 100,
+  )
+  if (bothRisk) {
+    return `${bothRisk.code} ${bothRisk.name} 温度与电流均超过设定上限，疑似过载或综合劣化，建议立即核查负载与机械状态。`
+  }
   const tempRisk = points.find(
-    (point) => point.temp_deviation_pct >= 8 && point.current_deviation_pct < 10,
+    (point) => point.temp_ratio_pct > 100 && point.current_ratio_pct <= 100,
   )
   if (tempRisk) {
-    return `${tempRisk.code} ${tempRisk.name} 落入「温度高 · 电流正常」象限 —— 电流正常但温度偏高，疑似散热、轴承或润滑问题，建议优先检查。`
+    return `${tempRisk.code} ${tempRisk.name} 温度超过设定上限、电流正常 —— 疑似散热、轴承或润滑问题，建议优先检查。`
   }
   const currentRisk = points.find(
-    (point) => point.current_deviation_pct >= 10 && point.temp_deviation_pct < 8,
+    (point) => point.current_ratio_pct > 100 && point.temp_ratio_pct <= 100,
   )
   if (currentRisk) {
-    return `${currentRisk.code} ${currentRisk.name} 落入「温度正常 · 电流异常」象限 —— 疑似负载或电气侧波动，建议检查变频器输出与负载。`
+    return `${currentRisk.code} ${currentRisk.name} 电流超过设定上限、温度正常 —— 疑似负载或电气侧异常，建议检查变频器输出与负载。`
   }
-  return '当前全部电机处于双正常区间，温度与电流均未明显偏离自身基线。'
+  return '当前全部电机温度与电流均未超过设定上限，处于正常区间。'
 })
 
-function riskScore(point: { temp_deviation_pct: number; current_deviation_pct: number }): number {
-  return (
-    Math.max(0, point.temp_deviation_pct - 8) + Math.max(0, point.current_deviation_pct - 10) * 1.1
-  )
+function riskScore(point: { temp_ratio_pct: number; current_ratio_pct: number }): number {
+  return Math.max(0, point.temp_ratio_pct - 100) + Math.max(0, point.current_ratio_pct - 100) * 1.1
 }
 
 const riskPoints = computed(() =>
-  [...(quadrant.value?.points || [])].sort((a, b) => riskScore(b) - riskScore(a)).slice(0, 3),
+  [...(quadrant.value?.points || [])]
+    .filter((point) => riskScore(point) > 0)
+    .sort((a, b) => riskScore(b) - riskScore(a))
+    .slice(0, 3),
 )
 
 const statusFilters = [
@@ -806,7 +813,7 @@ onMounted(() => {
               <button class="mini-btn primary" @click="goAnalysis()">进入对比分析</button>
             </div>
             <div class="sub">
-              偏离自身基线的百分比 · 点击象限图可定位电机 ·
+              温度/电流占设定上限的百分比 · 100% 为界，未超过上限即正常 ·
               {{ isHistorical ? `${selectedDate} 历史快照` : '实时数据' }}
             </div>
           </div>
@@ -844,16 +851,13 @@ onMounted(() => {
                 <p>
                   温度
                   <span
-                    :style="{ color: point.temp_deviation_pct >= 8 ? '#FF8296' : 'var(--muted)' }"
-                    >{{ signed(point.temp_deviation_pct) }}%</span
+                    :style="{ color: point.temp_ratio_pct > 100 ? '#FF8296' : 'var(--muted)' }"
+                    >{{ fmt(point.temp_ratio_pct, 0) }}%</span
                   >
                   · 电流
                   <span
-                    :style="{
-                      color:
-                        Math.abs(point.current_deviation_pct) >= 10 ? '#FFC65C' : 'var(--muted)',
-                    }"
-                    >{{ signed(point.current_deviation_pct) }}%</span
+                    :style="{ color: point.current_ratio_pct > 100 ? '#FFC65C' : 'var(--muted)' }"
+                    >{{ fmt(point.current_ratio_pct, 0) }}%</span
                   >
                 </p>
               </div>

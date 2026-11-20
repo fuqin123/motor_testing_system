@@ -36,15 +36,15 @@ function domain(values: number[], fallbackMin: number, fallbackMax: number): [nu
 }
 
 function buildOption(): echarts.EChartsOption {
-  const xs = props.points.map((point) => point.current_deviation_pct)
-  const ys = props.points.map((point) => point.temp_deviation_pct)
-  const [xMin, xMax] = domain(xs, -10, 22)
-  const [yMin, yMax] = domain(ys, -10, 30)
+  const xs = props.points.map((point) => point.current_ratio_pct)
+  const ys = props.points.map((point) => point.temp_ratio_pct)
+  const [xMin, xMax] = domain(xs, 50, 125)
+  const [yMin, yMax] = domain(ys, 50, 125)
   const labelSize = props.mini ? 10 : 11.5
   const symbolSize = props.mini ? 9 : 13
 
   const data = props.points.map((point) => ({
-    value: [point.current_deviation_pct, point.temp_deviation_pct],
+    value: [point.current_ratio_pct, point.temp_ratio_pct],
     code: point.code,
     name: point.name,
     status: point.status,
@@ -73,18 +73,19 @@ function buildOption(): echarts.EChartsOption {
         const item = params.data
         if (!item?.value) return ''
         return `<div style="font-size:11px;color:#5B6A8C;margin-bottom:4px">${item.code} · ${item.name}</div>
-          <div style="display:flex;gap:8px"><span style="color:#FFB224">温度偏离</span><b style="margin-left:auto">${fmt(item.value[1])}%</b></div>
-          <div style="display:flex;gap:8px"><span style="color:#2DD4EE">电流偏离</span><b style="margin-left:auto">${fmt(item.value[0])}%</b></div>`
+          <div style="display:flex;gap:8px"><span style="color:#FFB224">温度 / 上限</span><b style="margin-left:auto">${fmt(item.value[1])}%</b></div>
+          <div style="display:flex;gap:8px"><span style="color:#2DD4EE">电流 / 上限</span><b style="margin-left:auto">${fmt(item.value[0])}%</b></div>`
       },
     },
     xAxis: {
       type: 'value',
+      name: '',
       min: xMin,
       max: xMax,
       axisLabel: {
         color: '#5B6A8C',
         fontSize: 10,
-        formatter: (value: number) => `${value > 0 ? '+' : ''}${fmt(value, 0)}%`,
+        formatter: (value: number) => `${fmt(value, 0)}%`,
       },
       splitLine: { show: false },
       axisLine: { lineStyle: { color: 'rgba(148,163,204,.16)' } },
@@ -92,12 +93,13 @@ function buildOption(): echarts.EChartsOption {
     },
     yAxis: {
       type: 'value',
+      name: '',
       min: yMin,
       max: yMax,
       axisLabel: {
         color: '#5B6A8C',
         fontSize: 10,
-        formatter: (value: number) => `${value > 0 ? '+' : ''}${fmt(value, 0)}%`,
+        formatter: (value: number) => `${fmt(value, 0)}%`,
       },
       splitLine: { lineStyle: { color: 'rgba(148,163,204,.07)' } },
       axisLine: { show: false },
@@ -109,7 +111,7 @@ function buildOption(): echarts.EChartsOption {
         left: props.mini ? '14%' : '10%',
         top: '12%',
         style: {
-          text: props.mini ? '散热 · 轴承' : '温度高 · 电流正常',
+          text: props.mini ? '温度超限' : '温度超限 · 电流正常',
           fill: '#FF8296',
           font: `600 ${labelSize}px Inter, sans-serif`,
         },
@@ -119,7 +121,7 @@ function buildOption(): echarts.EChartsOption {
         right: props.mini ? '10%' : '8%',
         top: '12%',
         style: {
-          text: props.mini ? '双高 · 过载' : '双高 · 过载',
+          text: props.mini ? '双超限' : '双超限 · 过载',
           fill: '#F06AD8',
           font: `600 ${labelSize}px Inter, sans-serif`,
         },
@@ -129,7 +131,7 @@ function buildOption(): echarts.EChartsOption {
         right: props.mini ? '10%' : '8%',
         bottom: '16%',
         style: {
-          text: props.mini ? '负载 · 电气' : '温度正常 · 电流异常',
+          text: props.mini ? '电流超限' : '温度正常 · 电流超限',
           fill: '#FFC65C',
           font: `600 ${labelSize}px Inter, sans-serif`,
         },
@@ -139,7 +141,7 @@ function buildOption(): echarts.EChartsOption {
         left: props.mini ? '14%' : '10%',
         bottom: '16%',
         style: {
-          text: props.mini ? '运行健康' : '双正常 · 运行健康',
+          text: props.mini ? '双正常' : '双正常 · 运行健康',
           fill: '#5FE3BB',
           font: `600 ${labelSize}px Inter, sans-serif`,
         },
@@ -164,20 +166,20 @@ function buildOption(): echarts.EChartsOption {
           label: { show: false },
           data: [
             [
-              { coord: [xMin, 0], itemStyle: { color: 'rgba(255,77,109,.055)' } },
-              { coord: [0, yMax] },
+              { coord: [xMin, 100], itemStyle: { color: 'rgba(255,77,109,.055)' } },
+              { coord: [100, yMax] },
             ],
             [
-              { coord: [0, 0], itemStyle: { color: 'rgba(240,106,216,.05)' } },
+              { coord: [100, 100], itemStyle: { color: 'rgba(240,106,216,.05)' } },
               { coord: [xMax, yMax] },
             ],
             [
-              { coord: [0, yMin], itemStyle: { color: 'rgba(255,178,36,.05)' } },
-              { coord: [xMax, 0] },
+              { coord: [100, yMin], itemStyle: { color: 'rgba(255,178,36,.05)' } },
+              { coord: [xMax, 100] },
             ],
             [
               { coord: [xMin, yMin], itemStyle: { color: 'rgba(46,211,163,.05)' } },
-              { coord: [0, 0] },
+              { coord: [100, 100] },
             ],
           ],
         },
@@ -186,7 +188,7 @@ function buildOption(): echarts.EChartsOption {
           symbol: 'none',
           label: { show: false },
           lineStyle: { color: 'rgba(233,239,252,.28)', width: 1.1 },
-          data: [{ xAxis: 0 }, { yAxis: 0 }],
+          data: [{ xAxis: 100 }, { yAxis: 100 }],
         },
       },
     ],
@@ -238,8 +240,8 @@ watch(
     "
   />
   <div v-if="!props.mini" class="quadrant-axis-hint">
-    <span>纵轴 · 温度偏离 ↑</span>
-    <span>横轴 · 电流偏离 / 波动 →</span>
+    <span>纵轴 · 温度 / 上限 ↑</span>
+    <span>横轴 · 电流 / 上限 →</span>
   </div>
 </template>
 

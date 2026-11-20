@@ -155,9 +155,16 @@ function barWidth(value: number | null, max: number): number {
 
 function judgePoint(point: QuadrantPoint | null): { text: string; color: string } {
   if (!point) return { text: '暂无数据', color: 'var(--muted)' }
-  if (point.status === 'crit') return { text: '严重偏差异常，需立即核查', color: '#FF8296' }
-  if (point.status === 'warn') return { text: '偏离自身基线，建议关注', color: '#FFC65C' }
-  return { text: '双正常 · 运行健康', color: '#5FE3BB' }
+  if (point.temp_ratio_pct > 100 && point.current_ratio_pct > 100) {
+    return { text: '温度与电流均超过上限，需立即核查', color: '#FF8296' }
+  }
+  if (point.temp_ratio_pct > 100) {
+    return { text: '温度超过设定上限，建议检查散热与轴承', color: '#FFC65C' }
+  }
+  if (point.current_ratio_pct > 100) {
+    return { text: '电流超过设定上限，建议检查负载与电气', color: '#FFC65C' }
+  }
+  return { text: '双正常 · 温度与电流均未超过上限', color: '#5FE3BB' }
 }
 
 function openAlarm(alarmId: number) {
@@ -479,7 +486,7 @@ watch(
               ]"
               :height="150"
             />
-            <div v-else class="chart-empty" style="height: 140px">暂无基线样本</div>
+            <div v-else class="chart-empty" style="height: 140px">暂无电机读数</div>
           </div>
         </div>
 
@@ -685,9 +692,9 @@ watch(
           <div class="card-head">
             <h3>温度 × 电流四象限关联图</h3>
             <div class="right">
-              <span class="badge mut">全部 {{ quadData.points.length }} 台 · 偏离基线 %</span>
+              <span class="badge mut">全部 {{ quadData.points.length }} 台 · 占设定上限 %</span>
             </div>
-            <div class="sub">温度 + 电流一起看：两个维度交叉定位故障方向，点击数据点查看电机</div>
+            <div class="sub">温度 + 电流一起看：以设定上限为 100% 分界，未超过上限均为正常，点击数据点查看电机</div>
           </div>
           <div class="chart-wrap">
             <QuadrantChart
@@ -698,7 +705,7 @@ watch(
               fill
               @select="selectedQuad = $event"
             />
-            <div v-else class="chart-empty" style="height: 410px">暂无基线样本</div>
+            <div v-else class="chart-empty" style="height: 410px">暂无电机读数</div>
           </div>
         </div>
         <div class="card">
@@ -710,21 +717,21 @@ watch(
             <div class="quadrant-item">
               <i style="background: #ff4d6d" />
               <div>
-                <b>左上 · 温度高 / 电流正常</b>
+                <b>左上 · 温度超限 / 电流正常</b>
                 <p>可能是散热、轴承或润滑问题。优先检查风道与温升。</p>
               </div>
             </div>
             <div class="quadrant-item">
               <i style="background: #ffb224" />
               <div>
-                <b>右下 · 温度正常 / 电流异常</b>
+                <b>右下 · 温度正常 / 电流超限</b>
                 <p>可能是负载或电气问题。检查变频器输出与负载侧阻力。</p>
               </div>
             </div>
             <div class="quadrant-item">
               <i style="background: #f06ad8" />
               <div>
-                <b>右上 · 双高</b>
+                <b>右上 · 双超限</b>
                 <p>过载或综合劣化，需立即核查负载与机械状态。</p>
               </div>
             </div>
@@ -753,15 +760,15 @@ watch(
                 </div>
               </div>
               <div class="info-cell">
-                <div class="l">温度偏离</div>
-                <div class="v num" style="color: #ffc65c">
-                  {{ signed(selectedQuadPoint.temp_deviation_pct) }} %
+                <div class="l">温度 / 上限</div>
+                <div class="v num" :style="{ color: selectedQuadPoint.temp_ratio_pct > 100 ? '#ff8296' : '#5fe3bb' }">
+                  {{ fmt(selectedQuadPoint.temp_ratio_pct, 0) }} %
                 </div>
               </div>
               <div class="info-cell">
-                <div class="l">电流偏离</div>
-                <div class="v num" style="color: #7fe7f7">
-                  {{ signed(selectedQuadPoint.current_deviation_pct) }} %
+                <div class="l">电流 / 上限</div>
+                <div class="v num" :style="{ color: selectedQuadPoint.current_ratio_pct > 100 ? '#ffc65c' : '#5fe3bb' }">
+                  {{ fmt(selectedQuadPoint.current_ratio_pct, 0) }} %
                 </div>
               </div>
             </div>
@@ -776,7 +783,7 @@ watch(
         </div>
       </div>
       <div v-else class="card empty-state">
-        <b>暂无关联数据</b>请确认至少一台电机具有 30 天基线样本。
+        <b>暂无关联数据</b>请确认至少一台电机已有采集读数。
       </div>
     </div>
 
