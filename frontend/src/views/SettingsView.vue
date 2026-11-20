@@ -19,6 +19,7 @@ const originals = ref<Record<string, string>>({})
 const dirty = ref(false)
 const saving = ref(false)
 const samplingInterval = ref(15)
+const samplingRetryAttempts = ref(3)
 
 const lora = computed(() => settings.value?.lora || app.meta?.lora || null)
 const pilot = computed(() => settings.value?.pilot || app.pilot || null)
@@ -62,6 +63,7 @@ async function load() {
     const data = await api.settings()
     settings.value = data
     samplingInterval.value = data.sampling.interval_minutes
+    samplingRetryAttempts.value = data.sampling.packet_retry_max_attempts ?? 3
     thresholdMotors.value = structuredClone(data.motors)
     originals.value = Object.fromEntries(data.motors.map((motor) => [motor.code, snapshot(motor)]))
     dirty.value = false
@@ -131,8 +133,19 @@ async function saveAll() {
       ui.notify('warn', '采样间隔不合法', '请输入 1–120 之间的整数分钟')
       return
     }
-    if (samplingInterval.value !== settings.value.sampling.interval_minutes) {
-      await api.updateSampling(samplingInterval.value)
+    if (
+      !Number.isInteger(samplingRetryAttempts.value) ||
+      samplingRetryAttempts.value < 0 ||
+      samplingRetryAttempts.value > 10
+    ) {
+      ui.notify('warn', '丢包补采次数不合法', '请输入 0–10 之间的整数')
+      return
+    }
+    if (
+      samplingInterval.value !== settings.value.sampling.interval_minutes ||
+      samplingRetryAttempts.value !== (settings.value.sampling.packet_retry_max_attempts ?? 3)
+    ) {
+      await api.updateSampling(samplingInterval.value, samplingRetryAttempts.value)
     }
     for (const motor of thresholdMotors.value) {
       if (snapshot(motor) === originals.value[motor.code]) continue
@@ -480,6 +493,23 @@ onMounted(() => void load())
                 />
                 <span style="font-size: 12px; color: var(--faint)">分钟</span>
                 <span class="hint">1–120 分钟；保存后下一轮按新间隔调度</span>
+              </div>
+            </div>
+            <div class="set-row">
+              <span class="k">丢包最大补采次数</span>
+              <div class="grow">
+                <input
+                  v-model.number="samplingRetryAttempts"
+                  type="number"
+                  class="input"
+                  min="0"
+                  max="10"
+                  step="1"
+                  style="width: 100px"
+                  @input="markDirty"
+                />
+                <span style="font-size: 12px; color: var(--faint)">次</span>
+                <span class="hint">丢包后延迟 1 分钟补采，达到次数上限后停止</span>
               </div>
             </div>
             <div class="set-row">

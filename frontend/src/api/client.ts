@@ -125,6 +125,8 @@ export const api = {
     page?: number
     page_size?: number
   }) => request<AlarmList>(`/alarms${query(params)}`),
+  packetLosses: () =>
+    request<import('./types').PacketLossResponse>('/alarms/packet-losses'),
   alarm: (id: number) => request<Alarm>(`/alarms/${id}`),
   ackAlarm: (id: number) => request<Alarm>(`/alarms/${id}/ack`, { method: 'POST' }),
   closeAlarm: (id: number, solution: string) =>
@@ -157,11 +159,17 @@ export const api = {
       method: 'POST',
     }),
   settings: () => request<SettingsResponse>('/settings'),
-  updateSampling: (intervalMinutes: number) =>
-    request<{ interval_minutes: number }>('/settings/sampling', {
-      method: 'PUT',
-      body: JSON.stringify({ interval_minutes: intervalMinutes }),
-    }),
+  updateSampling: (intervalMinutes: number, retryMaxAttempts: number) =>
+    request<{ interval_minutes: number; packet_retry_max_attempts: number }>(
+      '/settings/sampling',
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          interval_minutes: intervalMinutes,
+          packet_retry_max_attempts: retryMaxAttempts,
+        }),
+      },
+    ),
   updateNotifications: (payload: Record<string, unknown>) =>
     request<import('./types').NotificationSettings>('/settings/notifications', {
       method: 'PUT',

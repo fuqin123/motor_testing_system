@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { api } from '@/api/client'
-import type { Alarm, AlarmList } from '@/api/types'
+import type { Alarm, AlarmList, PacketLossResponse } from '@/api/types'
 import AlarmDetailDrawer from '@/components/AlarmDetailDrawer.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import Icon from '@/components/Icon.vue'
@@ -21,6 +21,7 @@ import {
 const ui = useUiStore()
 
 const data = ref<AlarmList | null>(null)
+const packetLossData = ref<PacketLossResponse | null>(null)
 const loading = ref(false)
 const level = ref('all')
 const status = ref('all')
@@ -71,18 +72,35 @@ const allChecked = computed(
 async function load(silent = false) {
   if (!silent) loading.value = true
   try {
-    data.value = await api.alarms({
-      level: level.value,
-      status: status.value,
-      q: query.value.trim(),
-      page: page.value,
-      page_size: pageSize,
-    })
+    const [alarmData, lossData] = await Promise.all([
+      api.alarms({
+        level: level.value,
+        status: status.value,
+        q: query.value.trim(),
+        page: page.value,
+        page_size: pageSize,
+      }),
+      api.packetLosses().catch(() => null),
+    ])
+    data.value = alarmData
+    if (lossData) packetLossData.value = lossData
   } catch (error) {
     ui.notify('err', '告警列表加载失败', error instanceof Error ? error.message : '')
   } finally {
     loading.value = false
   }
+}
+
+function packetLossTone(status: string): 'ok' | 'warn' | 'crit' | 'mut' {
+  if (status === 'recovered') return 'ok'
+  if (status === 'failed') return 'crit'
+  return 'warn'
+}
+
+function packetLossText(status: string): string {
+  if (status === 'recovered') return '已补回'
+  if (status === 'failed') return '补采失败'
+  return '等待补采'
 }
 
 function applyFilters() {
@@ -251,6 +269,40 @@ onBeforeUnmount(() => {
             }}
           </div>
           <div class="l">平均响应时长</div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="packetLossData && packetLossData.items.length"
+      class="card packet-loss-card"
+    >
+      <div class="card-head">
+        <h3>丢包补采</h3>
+        <div class="right">
+          <span class="micro"
+            >待补 {{ packetLossData.stats.pending }} · 失败
+            {{ packetLossData.stats.failed }} · 已补回 {{ packetLossData.stats.recovered }}</span
+          >
+        </div>
+        <div class="sub">
+          丢包后每 {{ packetLossData.retry_delay_minutes }} 分钟补采一次，最多 {{ packetLossData.items[0]?.max_attempts ?? 3 }} 次；
+          以下保留原始错误信息，补采成功或达到上限后停止。
+        </div>
+      </div>
+      <div class="packet-loss-list">
+        <div v-for="item in packetLossData.items" :key="item.id" class="packet-loss-row">
+          <StateBadge :tone="packetLossTone(item.status)" :label="packetLossText(item.status)" />
+          <div class="packet-loss-main">
+            <div>
+              <b>{{ item.gateway_code }}</b>
+              <span v-if="item.sensor_code"> · {{ item.sensor_code }}</span>
+              <span v-if="item.motor_code"> · {{ item.motor_code }}</span>
+              <span class="packet-loss-time">{{ mmddhhmm(item.cycle_ts) }}</span>
+            </div>
+            <p>{{ item.error || '未返回错误信息' }}</p>
+          </div>
+          <span class="packet-loss-attempts">{{ item.attempts }} / {{ item.max_attempts }} 次</span>
         </div>
       </div>
     </div>
@@ -434,3 +486,48 @@ onBeforeUnmount(() => {
     </BaseModal>
   </section>
 </template>
+
+<style scoped>
+.packet-loss-card {
+  margin-bottom: 16px;
+}
+.packet-loss-list {
+  border-top: 1px solid var(--line-soft);
+}
+.packet-loss-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 20px;
+  border-top: 1px solid var(--line-soft);
+}
+.packet-loss-row:first-child {
+  border-top: none;
+}
+.packet-loss-main {
+  flex: 1;
+  min-width: 0;
+}
+.packet-loss-main b {
+  font-size: 12.5px;
+}
+.packet-loss-main p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.packet-loss-time {
+  margin-left: 10px;
+  color: var(--faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.packet-loss-attempts {
+  flex: none;
+  color: var(--faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+</style>

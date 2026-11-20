@@ -15,6 +15,8 @@ export interface PilotInfo {
 
 export interface SamplingInfo {
   interval_minutes: number
+  packet_retry_max_attempts?: number
+  packet_retry_delay_minutes?: number
   last_poll_at: string | null
   next_poll_at: string | null
   collector_mode: string
@@ -503,4 +505,25 @@ export interface FeishuAppSettings {
   secret_set: boolean
   group_name: string
   long_connection: FeishuLongConnectionStatus
+}
+
+export interface PacketLossItem {
+  id: number
+  cycle_ts: string
+  gateway_code: string
+  sensor_code: string | null
+  motor_code: string | null
+  attempts: number
+  max_attempts: number
+  status: 'pending' | 'recovered' | 'failed'
+  error: string | null
+  next_attempt_at: string | null
+  last_attempt_at: string | null
+  recovered_at: string | null
+}
+
+export interface PacketLossResponse {
+  items: PacketLossItem[]
+  stats: { pending: number; failed: number; recovered: number }
+  retry_delay_minutes: number
 }
