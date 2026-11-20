@@ -844,3 +844,112 @@ def test_quadrant_uses_limit_ratios(client, db):
     assert overload_point["temp_ratio_pct"] == 116.67
     assert overload_point["current_ratio_pct"] == 116.67
     assert overload_point["status"] == "crit"
+
+
+def test_packet_loss_records_and_api(client, db):
+    from app.db.models import Gateway, PacketLoss, Sensor
+    from app.services.collector import _record_packet_losses
+    from app.services.modbus import GatewayPlan, GatewayReadResult, SensorPlan, SensorReadResult
+
+    gateway = Gateway(code="GW-LOSS", name="丢包测试网关", host="127.0.0.1", port=15021)
+    motor = Motor(code="M-LOSS", name="丢包测试电机", rated_current_a=100)
+    db.add_all([gateway, motor])
+    db.flush()
+    sensor = Sensor(
+        code="T-LOSS",
+        motor_id=motor.id,
+        gateway_id=gateway.id,
+        kind="temperature",
+        name="丢包温度点",
+    )
+    db.add(sensor)
+    db.flush()
+    plan = GatewayPlan(
+        id=gateway.id,
+        code=gateway.code,
+        host=gateway.host,
+        port=gateway.port,
+        framer="rtu",
+        sensors=[
+            SensorPlan(
+                id=sensor.id,
+                code=sensor.code,
+                motor_id=motor.id,
+                motor_code=motor.code,
+                motor_name=motor.name,
+                gateway_id=gateway.id,
+                gateway_code=gateway.code,
+                kind="temperature",
+                slave_id=1,
+                register_address=0,
+                register_count=1,
+                scale=0.1,
+                unit="℃",
+            )
+        ],
+    )
+    result = GatewayReadResult(
+        gateway_code=gateway.code,
+        connected=True,
+        duration_ms=1,
+        sensor_results={
+            sensor.code: SensorReadResult(
+                sensor_code=sensor.code,
+                success=False,
+                error="Modbus timeout after 3s",
+            )
+        },
+    )
+    now = datetime.now(timezone.utc)
+    _record_packet_losses(db, plan, result, now, 3, now)
+    db.commit()
+
+    row = db.query(PacketLoss).filter(PacketLoss.sensor_code == sensor.code).one()
+    assert row.status == "pending"
+    assert row.attempts == 0
+    assert row.max_attempts == 3
+    assert row.error == "Modbus timeout after 3s"
+    assert row.next_attempt_at is not None
+
+    payload = client.get("/api/v1/alarms/packet-losses").json()
+    item = next(entry for entry in payload["items"] if entry["sensor_code"] == sensor.code)
+    assert item["error"] == "Modbus timeout after 3s"
+    assert item["max_attempts"] == 3
+
+
+def test_packet_retry_stops_after_max_attempts():
+    from app.db.models import PacketLoss
+    from app.services.collector import _apply_packet_retry_result
+    from app.services.modbus import GatewayReadResult, SensorReadResult
+
+    row = PacketLoss(
+        key="retry-test",
+        cycle_ts=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        gateway_id=1,
+        gateway_code="GW-01",
+        sensor_id=1,
+        sensor_code="T-01",
+        motor_id=1,
+        motor_code="M-01",
+        attempts=0,
+        max_attempts=2,
+        status="pending",
+    )
+    failed = GatewayReadResult(
+        gateway_code="GW-01",
+        connected=True,
+        duration_ms=1,
+        sensor_results={
+            "T-01": SensorReadResult(
+                sensor_code="T-01", success=False, error="CRC error"
+            )
+        },
+    )
+    _apply_packet_retry_result([row], failed, datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc))
+    assert row.status == "pending"
+    assert row.attempts == 1
+    _apply_packet_retry_result([row], failed, datetime(2026, 1, 1, 0, 2, tzinfo=timezone.utc))
+    assert row.status == "failed"
+    assert row.attempts == 2
+    assert row.next_attempt_at is None
+    assert row.error == "CRC error"

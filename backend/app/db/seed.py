@@ -16,6 +16,7 @@ from app.db.models import (
     Alarm,
     AlarmStreak,
     AuditLog,
+    PacketLoss,
     Gateway,
     Motor,
     NotificationLog,
@@ -143,6 +144,7 @@ def _sensor_code(motor_code: str, kind: str) -> str:
 
 
 def _reset_all(db: Session) -> None:
+    db.execute(delete(PacketLoss))
     db.execute(delete(AlarmStreak))
     db.execute(delete(NotificationLog))
     db.execute(delete(Alarm))

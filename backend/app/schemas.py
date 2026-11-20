@@ -65,7 +65,8 @@ class PollResponse(BaseModel):
 
 
 class SamplingUpdate(BaseModel):
-    interval_minutes: int = Field(ge=1, le=120)
+    interval_minutes: int | None = Field(default=None, ge=1, le=120)
+    packet_retry_max_attempts: int | None = Field(default=None, ge=0, le=10)
 
 
 class FeishuTestResponse(BaseModel):

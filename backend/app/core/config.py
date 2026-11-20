@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "MotorPulse 大电机风险监测平台"
-    app_version: str = "0.7.2"
+    app_version: str = "0.7.3"
     app_env: Literal["dev", "prod"] = "dev"
     api_prefix: str = "/api/v1"
     log_level: str = "INFO"
@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     baseline_cache_minutes: int = 60
     alarm_suppression_minutes: int = 30
     alarm_recheck_interval_minutes: int = 5
+    packet_retry_delay_minutes: int = 1
 
     feishu_enabled: bool = False
     feishu_webhook_url: str = ""

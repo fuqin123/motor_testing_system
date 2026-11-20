@@ -9,7 +9,7 @@ from sqlalchemy import delete, func, select
 
 from app.core.config import settings
 from app.core.time import as_utc, floor_bucket, iso, next_poll_time, utcnow
-from app.db.models import AlarmStreak, Gateway, Motor, PollCycle, Reading, Sensor
+from app.db.models import AlarmStreak, Gateway, Motor, PacketLoss, PollCycle, Reading, Sensor
 from app.db.session import SessionLocal
 from app.services.alarms import (
     CONFIRM_RULE_KEYS,
@@ -21,7 +21,7 @@ from app.services.alarms import (
 from app.services.baseline import compute_baseline
 from app.services.feishu import notify_alarm
 from app.services.modbus import GatewayPlan, GatewayReadResult, SensorPlan, read_gateway
-from app.services.settings import get_notification_config
+from app.services.settings import get_notification_config, get_sampling_config
 from app.services.simulator import simulate_gateway
 from app.services.telemetry import classify_operating_state, latest_readings
 
@@ -153,10 +153,113 @@ def _upsert_reading(
     return reading
 
 
+def _packet_key(ts: datetime, gateway_id: int, sensor_id: int | None) -> str:
+    return f"{ts.isoformat()}:{gateway_id}:{sensor_id or 0}"
+
+
+def _upsert_packet_loss(
+    db,
+    *,
+    ts: datetime,
+    gateway_id: int,
+    gateway_code: str,
+    sensor_id: int | None,
+    sensor_code: str | None,
+    motor_id: int | None,
+    motor_code: str | None,
+    error: str,
+    max_attempts: int,
+    now: datetime,
+) -> PacketLoss:
+    key = _packet_key(ts, gateway_id, sensor_id)
+    row = db.scalar(select(PacketLoss).where(PacketLoss.key == key))
+    if row is None:
+        row = PacketLoss(
+            key=key,
+            cycle_ts=ts,
+            gateway_id=gateway_id,
+            gateway_code=gateway_code,
+            sensor_id=sensor_id,
+            sensor_code=sensor_code,
+            motor_id=motor_id,
+            motor_code=motor_code,
+        )
+        db.add(row)
+    row.error = (error or "未知采集错误")[:2000]
+    row.max_attempts = max_attempts
+    row.attempts = 0
+    row.last_attempt_at = None
+    row.recovered_at = None
+    if max_attempts <= 0:
+        row.status = "failed"
+        row.next_attempt_at = None
+    else:
+        row.status = "pending"
+        row.next_attempt_at = now + timedelta(minutes=settings.packet_retry_delay_minutes)
+    return row
+
+
+def _mark_packet_recovered(
+    db, *, ts: datetime, gateway_id: int, sensor_id: int | None, now: datetime
+) -> None:
+    key = _packet_key(ts, gateway_id, sensor_id)
+    row = db.scalar(select(PacketLoss).where(PacketLoss.key == key))
+    if row is not None and row.status != "recovered":
+        row.status = "recovered"
+        row.recovered_at = now
+        row.next_attempt_at = None
+
+
+def _record_packet_losses(
+    db,
+    plan: GatewayPlan,
+    result: GatewayReadResult,
+    ts: datetime,
+    max_attempts: int,
+    now: datetime,
+) -> None:
+    if not result.connected:
+        _upsert_packet_loss(
+            db,
+            ts=ts,
+            gateway_id=plan.id,
+            gateway_code=plan.code,
+            sensor_id=None,
+            sensor_code=None,
+            motor_id=None,
+            motor_code=None,
+            error=result.error or "网关连接失败",
+            max_attempts=max_attempts,
+            now=now,
+        )
+        return
+    for sensor_plan in plan.sensors:
+        sensor_result = result.sensor_results.get(sensor_plan.code)
+        if sensor_result and sensor_result.success:
+            _mark_packet_recovered(
+                db, ts=ts, gateway_id=plan.id, sensor_id=sensor_plan.id, now=now
+            )
+            continue
+        _upsert_packet_loss(
+            db,
+            ts=ts,
+            gateway_id=plan.id,
+            gateway_code=plan.code,
+            sensor_id=sensor_plan.id,
+            sensor_code=sensor_plan.code,
+            motor_id=sensor_plan.motor_id,
+            motor_code=sensor_plan.motor_code,
+            error=(sensor_result.error if sensor_result else None) or "未返回读取结果",
+            max_attempts=max_attempts,
+            now=now,
+        )
+
+
 def persist_cycle(
     plans: list[GatewayPlan],
     results: list[GatewayReadResult],
     ts: datetime,
+    track_losses: bool = True,
 ) -> CycleSummary:
     started = utcnow()
     attempts = 0
@@ -167,6 +270,8 @@ def persist_cycle(
 
     with SessionLocal() as db:
         config = get_notification_config(db)
+        sampling = get_sampling_config(db)
+        retry_max_attempts = int(sampling.get("packet_retry_max_attempts", 3))
         for plan in plans:
             result = result_by_code.get(plan.code)
             if result is None:
@@ -178,6 +283,15 @@ def persist_cycle(
                 )
                 if alarm:
                     new_alarm_ids.append(alarm.id)
+            if track_losses:
+                _record_packet_losses(
+                    db,
+                    plan,
+                    result,
+                    ts,
+                    retry_max_attempts,
+                    utcnow(),
+                )
 
             motor_payload: dict[int, dict] = {}
             for sensor_plan in plan.sensors:
@@ -385,6 +499,115 @@ def run_poll_cycle(
     return summary
 
 
+def _apply_packet_retry_result(rows: list[PacketLoss], result: GatewayReadResult, now: datetime) -> None:
+    for row in rows:
+        row.attempts += 1
+        row.last_attempt_at = now
+        if row.sensor_id is None:
+            success = result.connected
+            error = result.error
+        else:
+            sensor_result = result.sensor_results.get(row.sensor_code or "")
+            success = bool(sensor_result and sensor_result.success)
+            error = sensor_result.error if sensor_result else "未返回读取结果"
+        if success:
+            row.status = "recovered"
+            row.recovered_at = now
+            row.next_attempt_at = None
+            continue
+        row.error = (error or "未知采集错误")[:2000]
+        if row.attempts >= row.max_attempts:
+            row.status = "failed"
+            row.next_attempt_at = None
+        else:
+            row.status = "pending"
+            row.next_attempt_at = now + timedelta(minutes=settings.packet_retry_delay_minutes)
+
+
+def retry_due_packet_losses() -> int:
+    now = utcnow()
+    with SessionLocal() as db:
+        due = list(
+            db.scalars(
+                select(PacketLoss)
+                .where(
+                    PacketLoss.status == "pending",
+                    PacketLoss.next_attempt_at.is_not(None),
+                    PacketLoss.next_attempt_at <= now,
+                )
+                .order_by(PacketLoss.next_attempt_at)
+                .limit(30)
+            ).all()
+        )
+        groups: dict[tuple[int, datetime], list[int]] = {}
+        for row in due:
+            groups.setdefault((row.gateway_id, as_utc(row.cycle_ts) or now), []).append(row.id)
+
+    for (gateway_id, cycle_ts), ids in groups.items():
+        with SessionLocal() as db:
+            plans = load_gateway_plans(db)
+            plan = next((item for item in plans if item.id == gateway_id), None)
+            rows = list(db.scalars(select(PacketLoss).where(PacketLoss.id.in_(ids))).all())
+            if plan is None:
+                attempted = utcnow()
+                for row in rows:
+                    row.attempts += 1
+                    row.last_attempt_at = attempted
+                    row.status = "failed"
+                    row.error = "网关或采集点已停用，无法补采"
+                    row.next_attempt_at = None
+                db.commit()
+                continue
+        try:
+            result = read_gateway(plan)
+            persist_cycle([plan], [result], cycle_ts, track_losses=False)
+        except Exception as exc:
+            logger.exception("丢包补采异常 gateway=%s ts=%s", plan.code, cycle_ts)
+            attempted = utcnow()
+            with SessionLocal() as db:
+                for row in db.scalars(select(PacketLoss).where(PacketLoss.id.in_(ids))).all():
+                    row.attempts += 1
+                    row.last_attempt_at = attempted
+                    row.error = str(exc)[:2000]
+                    if row.attempts >= row.max_attempts:
+                        row.status = "failed"
+                        row.next_attempt_at = None
+                    else:
+                        row.status = "pending"
+                        row.next_attempt_at = attempted + timedelta(
+                            minutes=settings.packet_retry_delay_minutes
+                        )
+                db.commit()
+            continue
+        with SessionLocal() as db:
+            _apply_packet_retry_result(
+                list(db.scalars(select(PacketLoss).where(PacketLoss.id.in_(ids))).all()),
+                result,
+                utcnow(),
+            )
+            db.commit()
+    return len(groups)
+
+
+class PacketRetryService(threading.Thread):
+    def __init__(self) -> None:
+        super().__init__(name="packet-retry", daemon=True)
+        self._stop_event = threading.Event()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+
+    def run(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                count = retry_due_packet_losses()
+                if count:
+                    logger.info("执行丢包补采 %s 组", count)
+            except Exception:
+                logger.exception("丢包补采调度异常")
+            self._stop_event.wait(2.0)
+
+
 def cleanup_old_data() -> None:
     cutoff = utcnow() - timedelta(days=settings.retention_days)
     poll_cutoff = utcnow() - timedelta(days=max(30, settings.retention_days))
@@ -520,3 +743,20 @@ def request_manual_poll() -> str:
 
     threading.Thread(target=_run_background, name="manual-poll", daemon=True).start()
     return "started"
+
+
+_packet_retry: PacketRetryService | None = None
+
+
+def start_packet_retry() -> PacketRetryService:
+    global _packet_retry
+    _packet_retry = PacketRetryService()
+    _packet_retry.start()
+    return _packet_retry
+
+
+def stop_packet_retry() -> None:
+    global _packet_retry
+    if _packet_retry is not None:
+        _packet_retry.stop()
+        _packet_retry = None

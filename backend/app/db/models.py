@@ -158,6 +158,34 @@ class Reading(Base):
     motor: Mapped["Motor"] = relationship(back_populates="readings")
 
 
+class PacketLoss(TimestampMixin, Base):
+    __tablename__ = "packet_losses"
+    __table_args__ = (UniqueConstraint("key", name="uq_packet_loss_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(160))
+    cycle_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    gateway_id: Mapped[int] = mapped_column(
+        ForeignKey("gateways.id", ondelete="CASCADE"), index=True
+    )
+    gateway_code: Mapped[str] = mapped_column(String(32))
+    sensor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sensors.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    sensor_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    motor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("motors.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    motor_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    recovered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AlarmStreak(TimestampMixin, Base):
     __tablename__ = "alarm_streaks"
     __table_args__ = (UniqueConstraint("motor_id", "rule_key", name="uq_alarm_streak_motor_rule"),)

@@ -13,7 +13,12 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.init_db import init_db
-from app.services.collector import get_collector, start_collector
+from app.services.collector import (
+    get_collector,
+    start_collector,
+    start_packet_retry,
+    stop_packet_retry,
+)
 from app.services.feishu_longconn import ensure_connection_from_db
 from app.services.settings import apply_sampling_config_from_db
 
@@ -31,12 +36,14 @@ async def lifespan(app: FastAPI):
         seed_demo(reset=False)
     if settings.run_collector:
         start_collector()
+        start_packet_retry()
         logger.info("采集调度器已启动，间隔 %s 分钟", settings.poll_interval_minutes)
     try:
         ensure_connection_from_db()
     except Exception:
         logger.exception("飞书长连接启动失败")
     yield
+    stop_packet_retry()
     collector = get_collector()
     if collector:
         collector.stop()

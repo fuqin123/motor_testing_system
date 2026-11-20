@@ -33,11 +33,32 @@ def get_sampling_config(db: Session) -> dict:
         interval = settings.poll_interval_minutes
     if interval < 1 or interval > 1440:
         interval = settings.poll_interval_minutes
-    return {"interval_minutes": interval}
+    try:
+        retry_attempts = int(value.get("packet_retry_max_attempts", 3))
+    except (TypeError, ValueError):
+        retry_attempts = 3
+    retry_attempts = max(0, min(10, retry_attempts))
+    return {
+        "interval_minutes": interval,
+        "packet_retry_max_attempts": retry_attempts,
+    }
 
 
-def save_sampling_config(db: Session, interval_minutes: int, actor: str) -> dict:
-    return save_config(db, "sampling", {"interval_minutes": interval_minutes}, actor)
+def save_sampling_config(
+    db: Session,
+    interval_minutes: int,
+    packet_retry_max_attempts: int,
+    actor: str,
+) -> dict:
+    return save_config(
+        db,
+        "sampling",
+        {
+            "interval_minutes": interval_minutes,
+            "packet_retry_max_attempts": packet_retry_max_attempts,
+        },
+        actor,
+    )
 
 
 def apply_sampling_config(db: Session) -> dict:

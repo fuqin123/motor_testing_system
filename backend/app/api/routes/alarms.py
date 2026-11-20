@@ -16,8 +16,8 @@ from app.api.serializers import (
 )
 from app.core.config import settings
 from app.core.security import UserContext
-from app.core.time import as_utc, local_day_bounds_utc, utcnow
-from app.db.models import Alarm
+from app.core.time import as_utc, iso, local_day_bounds_utc, utcnow
+from app.db.models import Alarm, PacketLoss
 from app.schemas import BulkCloseRequest, CloseAlarmRequest
 
 router = APIRouter(tags=["告警"])
@@ -179,6 +179,54 @@ def export_alarms(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/alarms/packet-losses")
+def list_packet_losses(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    user: UserContext = Depends(get_current_user),
+) -> dict:
+    rows = list(
+        db.scalars(
+            select(PacketLoss).order_by(PacketLoss.created_at.desc()).limit(limit)
+        ).all()
+    )
+    stats = {
+        "pending": db.scalar(
+            select(func.count(PacketLoss.id)).where(PacketLoss.status == "pending")
+        )
+        or 0,
+        "failed": db.scalar(
+            select(func.count(PacketLoss.id)).where(PacketLoss.status == "failed")
+        )
+        or 0,
+        "recovered": db.scalar(
+            select(func.count(PacketLoss.id)).where(PacketLoss.status == "recovered")
+        )
+        or 0,
+    }
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "cycle_ts": iso(row.cycle_ts),
+                "gateway_code": row.gateway_code,
+                "sensor_code": row.sensor_code,
+                "motor_code": row.motor_code,
+                "attempts": row.attempts,
+                "max_attempts": row.max_attempts,
+                "status": row.status,
+                "error": row.error,
+                "next_attempt_at": iso(row.next_attempt_at),
+                "last_attempt_at": iso(row.last_attempt_at),
+                "recovered_at": iso(row.recovered_at),
+            }
+            for row in rows
+        ],
+        "stats": stats,
+        "retry_delay_minutes": settings.packet_retry_delay_minutes,
+    }
 
 
 @router.get("/alarms/{alarm_id}")

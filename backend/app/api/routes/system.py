@@ -13,6 +13,7 @@ from app.services.acceptance import acceptance_snapshot
 from app.services.collector import get_collector, request_manual_poll
 from app.services.settings import (
     get_feishu_app_config,
+    get_sampling_config,
     get_notification_config,
     public_feishu_app_config,
 )
@@ -21,16 +22,19 @@ router = APIRouter(tags=["系统"])
 
 
 def _sampling(db: Session) -> dict:
+    sampling = get_sampling_config(db)
     last_cycle = db.scalar(select(PollCycle).order_by(PollCycle.started_at.desc()).limit(1))
     collector = get_collector()
     status = collector.status() if collector else None
     next_run = (
         status.get("next_run_at")
         if status and status.get("next_run_at")
-        else iso(next_poll_time(utcnow(), settings.poll_interval_minutes))
+        else iso(next_poll_time(utcnow(), sampling["interval_minutes"]))
     )
     return {
-        "interval_minutes": settings.poll_interval_minutes,
+        "interval_minutes": sampling["interval_minutes"],
+        "packet_retry_max_attempts": sampling["packet_retry_max_attempts"],
+        "packet_retry_delay_minutes": settings.packet_retry_delay_minutes,
         "last_poll_at": (
             iso(last_cycle.finished_at or last_cycle.started_at) if last_cycle else None
         ),

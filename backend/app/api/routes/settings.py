@@ -26,6 +26,7 @@ from app.services.settings import (
     apply_sampling_config,
     get_feishu_app_config,
     get_notification_config,
+    get_sampling_config,
     save_sampling_config,
     public_feishu_app_config,
     save_feishu_app_config,
@@ -123,7 +124,21 @@ def update_sampling(
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ) -> dict:
-    config = save_sampling_config(db, payload.interval_minutes, user.name)
+    changes = payload.model_dump(exclude_none=True)
+    if not changes:
+        raise HTTPException(status_code=422, detail="没有需要更新的字段")
+    current = get_sampling_config(db)
+    config = save_sampling_config(
+        db,
+        int(changes.get("interval_minutes", current["interval_minutes"])),
+        int(
+            changes.get(
+                "packet_retry_max_attempts",
+                current["packet_retry_max_attempts"],
+            )
+        ),
+        user.name,
+    )
     apply_sampling_config(db)
     audit(db, user, "update_sampling", "sampling", config)
     db.commit()

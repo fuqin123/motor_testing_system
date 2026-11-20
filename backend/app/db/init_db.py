@@ -40,7 +40,10 @@ def init_db() -> None:
             db.add(
                 AppConfig(
                     key="sampling",
-                    value={"interval_minutes": settings.poll_interval_minutes},
+                    value={
+                        "interval_minutes": settings.poll_interval_minutes,
+                        "packet_retry_max_attempts": 3,
+                    },
                 )
             )
         if db.get(AppConfig, "pilot") is None:
