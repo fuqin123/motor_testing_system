@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "MotorPulse 大电机风险监测平台"
-    app_version: str = "0.7.1"
+    app_version: str = "0.7.2"
     app_env: Literal["dev", "prod"] = "dev"
     api_prefix: str = "/api/v1"
     log_level: str = "INFO"

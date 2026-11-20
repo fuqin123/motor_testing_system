@@ -793,3 +793,54 @@ def test_overload_tolerance_applies_to_temperature_and_current():
     assert "current_high" in keys
     current = next(item for item in overloaded if item.rule_key == "current_high")
     assert current.threshold == 660.0
+
+
+def test_quadrant_uses_limit_ratios(client, db):
+    now = datetime.now(timezone.utc)
+    normal = Motor(
+        code="Q-OK",
+        name="象限正常电机",
+        rated_current_a=500,
+        temp_limit_c=60,
+        current_limit_a=600,
+        enabled=True,
+    )
+    overload = Motor(
+        code="Q-OVER",
+        name="象限超限电机",
+        rated_current_a=500,
+        temp_limit_c=60,
+        current_limit_a=600,
+        enabled=True,
+    )
+    db.add_all([normal, overload])
+    db.flush()
+    db.add_all(
+        [
+            Reading(
+                motor_id=normal.id,
+                ts=now,
+                temperature_c=50,
+                current_avg_a=300,
+                quality="ok",
+            ),
+            Reading(
+                motor_id=overload.id,
+                ts=now,
+                temperature_c=70,
+                current_avg_a=700,
+                quality="ok",
+            ),
+        ]
+    )
+    db.commit()
+
+    points = client.get("/api/v1/analysis/quadrant").json()["points"]
+    normal_point = next(item for item in points if item["code"] == "Q-OK")
+    overload_point = next(item for item in points if item["code"] == "Q-OVER")
+    assert normal_point["temp_ratio_pct"] == 83.33
+    assert normal_point["current_ratio_pct"] == 50.0
+    assert normal_point["status"] == "ok"
+    assert overload_point["temp_ratio_pct"] == 116.67
+    assert overload_point["current_ratio_pct"] == 116.67
+    assert overload_point["status"] == "crit"

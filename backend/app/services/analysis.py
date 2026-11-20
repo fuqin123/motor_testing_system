@@ -401,28 +401,32 @@ def build_quadrant(db: Session, now: datetime | None = None) -> dict:
     points = []
     for motor in motors:
         latest = latest_map.get(motor.id)
-        if latest is None:
+        if latest is None or latest.temperature_c is None or latest.current_avg_a is None:
             continue
-        baseline = compute_baseline(db, motor, now=now)
-        if baseline is None:
+        if motor.temp_limit_c <= 0 or motor.current_limit_a <= 0:
             continue
-        temp_dev = deviation_pct(latest.temperature_c, baseline.temp_median)
-        current_dev = deviation_pct(latest.current_avg_a, baseline.current_median)
-        if temp_dev is None or current_dev is None:
-            continue
-        metric = _motor_metric(db, motor, latest, baseline)
+        temp_ratio = latest.temperature_c / motor.temp_limit_c * 100
+        current_ratio = latest.current_avg_a / motor.current_limit_a * 100
+        if temp_ratio > 100 and current_ratio > 100:
+            status = "crit"
+        elif temp_ratio > 100 or current_ratio > 100:
+            status = "warn"
+        else:
+            status = "ok"
         points.append(
             {
                 "code": motor.code,
                 "name": motor.name,
-                "temp_deviation_pct": round(temp_dev, 2),
-                "current_deviation_pct": round(current_dev, 2),
-                "status": metric["status"],
+                "temp_ratio_pct": round(temp_ratio, 2),
+                "current_ratio_pct": round(current_ratio, 2),
+                "temp_limit_c": motor.temp_limit_c,
+                "current_limit_a": motor.current_limit_a,
+                "status": status,
             }
         )
     return {
         "points": points,
-        "thresholds": {"temp_pct": 8.0, "current_pct": 10.0},
+        "thresholds": {"temp_pct": 100.0, "current_pct": 100.0},
     }
 
 
