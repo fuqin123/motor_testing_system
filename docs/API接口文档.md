@@ -1,6 +1,6 @@
 # API 接口文档
 
-> 版本：v0.7.2 · 2026-11-19
+> 版本：v0.7.3 · 2026-11-20
 > Base URL：`http://<host>:8000/api/v1`
 > 在线文档：`/api/docs`（Swagger UI）· `/api/redoc` · `/api/openapi.json`
 
@@ -631,7 +631,38 @@
 }
 ```
 
-### 6.2 告警详情
+### 6.2 丢包补采记录
+
+`GET /alarms/packet-losses?limit=50`
+
+```json
+{
+  "items": [
+    {
+      "id": 12,
+      "cycle_ts": "2026-11-20T02:15:00Z",
+      "gateway_code": "GW-01",
+      "sensor_code": "T-01",
+      "motor_code": "M-01",
+      "attempts": 1,
+      "max_attempts": 3,
+      "status": "pending",
+      "error": "Modbus timeout after 3s",
+      "next_attempt_at": "2026-11-20T02:17:00Z",
+      "last_attempt_at": "2026-11-20T02:16:00Z",
+      "recovered_at": null
+    }
+  ],
+  "stats": { "pending": 1, "failed": 0, "recovered": 4 },
+  "retry_delay_minutes": 1
+}
+```
+
+- 采集失败后写入记录；后台按 1 分钟延迟补采，成功后状态为 `recovered`，达到最大次数为 `failed`。
+- `error` 为最近一次真实采集错误，便于现场验证；`attempts/max_attempts` 表示已补采次数和上限。
+- 网关连接失败时 `sensor_code`/`motor_code` 可能为 `null`。
+
+### 6.3 告警详情
 
 `GET /alarms/{alarm_id}`
 
@@ -899,22 +930,28 @@
 }
 ```
 
-### 8.1.1 保存采样间隔
+### 8.1.1 保存采样与丢包补采参数
 
 `PUT /settings/sampling`
 
 ```json
-{ "interval_minutes": 30 }
+{
+  "interval_minutes": 30,
+  "packet_retry_max_attempts": 3
+}
 ```
 
 响应：
 
 ```json
-{ "interval_minutes": 30 }
+{
+  "interval_minutes": 30,
+  "packet_retry_max_attempts": 3
+}
 ```
 
-- 范围 1–120 分钟；保存后采集线程自动重排下一轮，无需重启。
-- 配置持久化到 `app_configs.sampling`，重启后恢复。
+- 采样范围 1–120 分钟；补采次数 0–10；保存后采集线程自动重排下一轮，无需重启。
+- 配置持久化到 `app_configs.sampling`，重启后恢复；补采延迟由 `MP_PACKET_RETRY_DELAY_MINUTES` 控制，默认 1 分钟。
 
 ### 8.2 保存通知设置
 
