@@ -50,13 +50,14 @@
 ```bash
 cp .env.example .env
 # 修改 .env：数据库密码、采集模式等；飞书应用凭据在前端“通知机器人”页面绑定
+# 同机已有 EEP/其他项目时，设置未占用的 API_HOST_PORT / WEB_PORT，例如 18000/18080
 docker compose up -d --build
 ```
 
 访问：
 
-- 前端：<http://服务器IP:8080>（若 8080 被占用，在 `.env` 设置 `WEB_PORT=8081` 后执行 `docker compose up -d web`）
-- API 文档：<http://服务器IP:8000/api/docs>
+- 前端：<http://服务器IP:8080>（若 8080 被占用，在 `.env` 设置 `WEB_PORT=18080` 后执行 `docker compose up -d web`）
+- API 文档：<http://服务器IP:8000/api/docs>（后端宿主端口可用 `API_HOST_PORT` 修改）
 - 健康检查：<http://服务器IP:8000/api/v1/health>
 
 导入现场点表：
@@ -75,7 +76,7 @@ docker compose exec backend python -m app.cli seed-demo --reset
 docker compose restart backend
 ```
 
-详细步骤见 [部署手册](docs/05-部署手册.md)。
+详细步骤见 [部署手册](docs/05-部署手册.md)，其中包含“与现有 EEP 项目共用虚拟机”的端口、网络和数据库隔离步骤。
 
 ## 本地开发
 

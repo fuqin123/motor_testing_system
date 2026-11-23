@@ -46,7 +46,7 @@ services:
     volumes:
       - ./config:/app/config:ro
     ports:
-      - "8000:8000"
+      - "${API_HOST_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "python", "healthcheck.py"]
       interval: 30s
