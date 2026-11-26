@@ -199,8 +199,11 @@ function attemptNoText(attemptNo: number): string {
 }
 
 function lossReason(item: PacketLossItem): string {
-  const text = item.error || '未返回错误信息'
-  return item.status === 'recovered' ? `首次失败：${text}` : text
+  if (item.status === 'recovered') {
+    const firstFailure = item.attempts_log.find((log) => !log.success)
+    return `首次失败：${firstFailure?.error || item.error || '未返回错误信息'}`
+  }
+  return item.error || '未返回错误信息'
 }
 
 function changePageSize(size: number) {
