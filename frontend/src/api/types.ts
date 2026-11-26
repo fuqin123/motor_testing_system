@@ -507,6 +507,13 @@ export interface FeishuAppSettings {
   long_connection: FeishuLongConnectionStatus
 }
 
+export interface PacketLossAttemptItem {
+  attempt_no: number
+  attempted_at: string | null
+  success: boolean
+  error: string | null
+}
+
 export interface PacketLossItem {
   id: number
   cycle_ts: string
@@ -520,10 +527,14 @@ export interface PacketLossItem {
   next_attempt_at: string | null
   last_attempt_at: string | null
   recovered_at: string | null
+  attempts_log: PacketLossAttemptItem[]
 }
 
 export interface PacketLossResponse {
   items: PacketLossItem[]
+  total: number
+  page: number
+  page_size: number
   stats: { pending: number; failed: number; recovered: number }
   retry_delay_minutes: number
 }

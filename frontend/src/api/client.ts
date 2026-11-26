@@ -125,8 +125,12 @@ export const api = {
     page?: number
     page_size?: number
   }) => request<AlarmList>(`/alarms${query(params)}`),
-  packetLosses: () =>
-    request<import('./types').PacketLossResponse>('/alarms/packet-losses'),
+  packetLosses: (params?: {
+    status?: string
+    q?: string
+    page?: number
+    page_size?: number
+  }) => request<import('./types').PacketLossResponse>(`/alarms/packet-losses${query(params || {})}`),
   alarm: (id: number) => request<Alarm>(`/alarms/${id}`),
   ackAlarm: (id: number) => request<Alarm>(`/alarms/${id}/ack`, { method: 'POST' }),
   closeAlarm: (id: number, solution: string) =>

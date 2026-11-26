@@ -2,10 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { api } from '@/api/client'
-import type { Alarm, AlarmList, PacketLossResponse } from '@/api/types'
+import type { Alarm, AlarmList, PacketLossItem, PacketLossResponse } from '@/api/types'
 import AlarmDetailDrawer from '@/components/AlarmDetailDrawer.vue'
 import BaseModal from '@/components/BaseModal.vue'
 import Icon from '@/components/Icon.vue'
+import PagerBar from '@/components/PagerBar.vue'
 import StateBadge from '@/components/StateBadge.vue'
 import { useUiStore } from '@/stores/ui'
 import { downloadBlob } from '@/utils/download'
@@ -22,12 +23,18 @@ const ui = useUiStore()
 
 const data = ref<AlarmList | null>(null)
 const packetLossData = ref<PacketLossResponse | null>(null)
+const lossLoading = ref(false)
+const lossStatus = ref('all')
+const lossQuery = ref('')
+const lossPage = ref(1)
+const lossPageSize = ref(5)
+const expandedLoss = ref<Set<number>>(new Set())
 const loading = ref(false)
 const level = ref('all')
 const status = ref('all')
 const query = ref('')
 const page = ref(1)
-const pageSize = 50
+const pageSize = ref(50)
 const selected = ref<Set<number>>(new Set())
 const sortKey = ref<'time' | 'level'>('time')
 const sortDir = ref<1 | -1>(-1)
@@ -36,6 +43,7 @@ const activeAlarmId = ref<number | null>(null)
 const deleteTarget = ref<Alarm | null>(null)
 const deleting = ref(false)
 let searchTimer: number | null = null
+let lossSearchTimer: number | null = null
 let refreshTimer: number | null = null
 
 const levelFilters = [
@@ -62,7 +70,6 @@ const sortedItems = computed(() => {
   })
   return items
 })
-const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.total || 0) / pageSize)))
 const allChecked = computed(
   () =>
     sortedItems.value.length > 0 &&
@@ -72,23 +79,135 @@ const allChecked = computed(
 async function load(silent = false) {
   if (!silent) loading.value = true
   try {
-    const [alarmData, lossData] = await Promise.all([
-      api.alarms({
-        level: level.value,
-        status: status.value,
-        q: query.value.trim(),
-        page: page.value,
-        page_size: pageSize,
-      }),
-      api.packetLosses().catch(() => null),
-    ])
-    data.value = alarmData
-    if (lossData) packetLossData.value = lossData
+    const payload = await api.alarms({
+      level: level.value,
+      status: status.value,
+      q: query.value.trim(),
+      page: page.value,
+      page_size: pageSize.value,
+    })
+    if (!payload.items.length && page.value > 1) {
+      const lastPage = Math.max(1, Math.ceil(payload.total / pageSize.value))
+      if (lastPage !== page.value) {
+        page.value = lastPage
+        await load(silent)
+        return
+      }
+    }
+    data.value = payload
   } catch (error) {
     ui.notify('err', '告警列表加载失败', error instanceof Error ? error.message : '')
   } finally {
     loading.value = false
   }
+}
+
+async function loadPacketLosses(silent = false) {
+  if (!silent) lossLoading.value = true
+  try {
+    const payload = await api.packetLosses({
+      status: lossStatus.value,
+      q: lossQuery.value.trim(),
+      page: lossPage.value,
+      page_size: lossPageSize.value,
+    })
+    if (!payload.items.length && lossPage.value > 1) {
+      const lastPage = Math.max(1, Math.ceil(payload.total / lossPageSize.value))
+      if (lastPage !== lossPage.value) {
+        lossPage.value = lastPage
+        await loadPacketLosses(silent)
+        return
+      }
+    }
+    packetLossData.value = payload
+  } catch (error) {
+    if (!silent) {
+      ui.notify('err', '丢包补采记录加载失败', error instanceof Error ? error.message : '')
+    }
+  } finally {
+    lossLoading.value = false
+  }
+}
+
+const lossStats = computed(
+  () => packetLossData.value?.stats ?? { pending: 0, failed: 0, recovered: 0 },
+)
+const lossFilters = computed(() => [
+  {
+    key: 'all',
+    label: '全部',
+    count: lossStats.value.pending + lossStats.value.failed + lossStats.value.recovered,
+  },
+  { key: 'pending', label: '待补采', count: lossStats.value.pending },
+  { key: 'failed', label: '补采失败', count: lossStats.value.failed },
+  { key: 'recovered', label: '已补回', count: lossStats.value.recovered },
+])
+const lossAllExpanded = computed(
+  () =>
+    (packetLossData.value?.items.length ?? 0) > 0 &&
+    packetLossData.value!.items.every((item) => expandedLoss.value.has(item.id)),
+)
+
+function setLossStatus(value: string) {
+  if (lossStatus.value === value) return
+  lossStatus.value = value
+  lossPage.value = 1
+  expandedLoss.value = new Set()
+  void loadPacketLosses()
+}
+
+function onLossSearch() {
+  if (lossSearchTimer) window.clearTimeout(lossSearchTimer)
+  lossSearchTimer = window.setTimeout(() => {
+    lossPage.value = 1
+    expandedLoss.value = new Set()
+    void loadPacketLosses()
+  }, 320)
+}
+
+function changeLossPage(next: number) {
+  lossPage.value = next
+  void loadPacketLosses()
+}
+
+function changeLossPageSize(size: number) {
+  lossPageSize.value = size
+  lossPage.value = 1
+  void loadPacketLosses()
+}
+
+function toggleLoss(id: number) {
+  const next = new Set(expandedLoss.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expandedLoss.value = next
+}
+
+function toggleAllLoss() {
+  if (!packetLossData.value) return
+  expandedLoss.value = lossAllExpanded.value
+    ? new Set()
+    : new Set(packetLossData.value.items.map((item) => item.id))
+}
+
+function isLossExpanded(item: PacketLossItem): boolean {
+  return expandedLoss.value.has(item.id)
+}
+
+function attemptNoText(attemptNo: number): string {
+  return attemptNo === 0 ? '初次采集' : `第 ${attemptNo} 次补采`
+}
+
+function lossReason(item: PacketLossItem): string {
+  const text = item.error || '未返回错误信息'
+  return item.status === 'recovered' ? `首次失败：${text}` : text
+}
+
+function changePageSize(size: number) {
+  pageSize.value = size
+  page.value = 1
+  selected.value = new Set()
+  void load()
 }
 
 function packetLossTone(status: string): 'ok' | 'warn' | 'crit' | 'mut' {
@@ -215,14 +334,19 @@ function changePage(next: number) {
 
 onMounted(() => {
   void load()
+  void loadPacketLosses()
   refreshTimer = window.setInterval(() => {
-    if (document.visibilityState === 'visible') void load(true)
+    if (document.visibilityState === 'visible') {
+      void load(true)
+      void loadPacketLosses(true)
+    }
   }, 30_000)
 })
 
 onBeforeUnmount(() => {
   if (refreshTimer) window.clearInterval(refreshTimer)
   if (searchTimer) window.clearTimeout(searchTimer)
+  if (lossSearchTimer) window.clearTimeout(lossSearchTimer)
 })
 </script>
 
@@ -274,37 +398,169 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      v-if="packetLossData && packetLossData.items.length"
+      v-if="packetLossData && (packetLossData.total || lossStats.pending + lossStats.failed + lossStats.recovered)"
       class="card packet-loss-card"
     >
       <div class="card-head">
         <h3>丢包补采</h3>
         <div class="right">
+          <span v-if="lossLoading" class="spinner" />
           <span class="micro"
-            >待补 {{ packetLossData.stats.pending }} · 失败
-            {{ packetLossData.stats.failed }} · 已补回 {{ packetLossData.stats.recovered }}</span
+            >待补 {{ lossStats.pending }} · 失败 {{ lossStats.failed }} · 已补回
+            {{ lossStats.recovered }}</span
           >
+          <button
+            v-if="packetLossData.items.length > 1"
+            class="btn btn-ghost btn-sm"
+            @click="toggleAllLoss"
+          >
+            {{ lossAllExpanded ? '收起明细' : '展开明细' }}
+          </button>
         </div>
         <div class="sub">
-          丢包后每 {{ packetLossData.retry_delay_minutes }} 分钟补采一次，最多 {{ packetLossData.items[0]?.max_attempts ?? 3 }} 次；
-          以下保留原始错误信息，补采成功或达到上限后停止。
+          丢包后每 {{ packetLossData.retry_delay_minutes }} 分钟补采一次，最多
+          {{ packetLossData.items[0]?.max_attempts ?? 3 }} 次；点击任意记录可逐次查看补采时间与失败原因。
         </div>
       </div>
-      <div class="packet-loss-list">
-        <div v-for="item in packetLossData.items" :key="item.id" class="packet-loss-row">
-          <StateBadge :tone="packetLossTone(item.status)" :label="packetLossText(item.status)" />
-          <div class="packet-loss-main">
-            <div>
+
+      <div class="pl-toolbar">
+        <div class="pl-chips">
+          <button
+            v-for="filter in lossFilters"
+            :key="filter.key"
+            :class="['chip', lossStatus === filter.key ? 'active' : '']"
+            @click="setLossStatus(filter.key)"
+          >
+            {{ filter.label }}<span class="cnt">{{ filter.count }}</span>
+          </button>
+        </div>
+        <label class="search pl-search">
+          <Icon name="search" :size="15" />
+          <input
+            v-model="lossQuery"
+            placeholder="网关 / 采集点 / 电机 / 错误信息"
+            @input="onLossSearch"
+          />
+        </label>
+      </div>
+
+      <div class="pl-scroll">
+        <div class="pl-head-row">
+          <span>状态</span>
+          <span>采集点</span>
+          <span>采集周期</span>
+          <span>补采进度</span>
+          <span>失败原因</span>
+          <span>下次补采</span>
+          <span />
+        </div>
+        <div
+          v-for="item in packetLossData.items"
+          :key="item.id"
+          class="pl-item"
+          :class="{ open: isLossExpanded(item) }"
+        >
+          <div
+            class="pl-row"
+            role="button"
+            tabindex="0"
+            :aria-expanded="isLossExpanded(item)"
+            @click="toggleLoss(item.id)"
+            @keydown.enter.prevent="toggleLoss(item.id)"
+            @keydown.space.prevent="toggleLoss(item.id)"
+          >
+            <StateBadge :tone="packetLossTone(item.status)" :label="packetLossText(item.status)" />
+            <div class="pl-point">
               <b>{{ item.gateway_code }}</b>
-              <span v-if="item.sensor_code"> · {{ item.sensor_code }}</span>
-              <span v-if="item.motor_code"> · {{ item.motor_code }}</span>
-              <span class="packet-loss-time">{{ mmddhhmm(item.cycle_ts) }}</span>
+              <span>
+                {{ item.sensor_code || '网关整体' }}
+                <template v-if="item.motor_code"> · {{ item.motor_code }}</template>
+              </span>
             </div>
-            <p>{{ item.error || '未返回错误信息' }}</p>
+            <span class="pl-cell num">{{ mmddhhmm(item.cycle_ts) }}</span>
+            <span class="pl-progress">
+              <span class="pl-bar">
+                <i
+                  :class="item.status"
+                  :style="{
+                    width: `${Math.min(100, (item.attempts / Math.max(1, item.max_attempts)) * 100)}%`,
+                  }"
+                />
+              </span>
+              <span class="num">{{ item.attempts }}/{{ item.max_attempts }}</span>
+            </span>
+            <span class="pl-reason" :title="lossReason(item)">{{ lossReason(item) }}</span>
+            <span class="pl-cell num">{{
+              item.next_attempt_at ? mmddhhmm(item.next_attempt_at) : '已停止'
+            }}</span>
+            <span class="pl-chev" :class="{ open: isLossExpanded(item) }">
+              <Icon name="chevR" :size="14" />
+            </span>
           </div>
-          <span class="packet-loss-attempts">{{ item.attempts }} / {{ item.max_attempts }} 次</span>
+
+          <div v-if="isLossExpanded(item)" class="pl-detail">
+            <div class="pl-detail-head">
+              <b>补采记录 · 共 {{ item.attempts_log.length }} 次</b>
+              <span>
+                采集周期 {{ mmddhhmm(item.cycle_ts) }} · 网关 {{ item.gateway_code }}
+                <template v-if="item.sensor_code"> · 采集点 {{ item.sensor_code }}</template>
+              </span>
+            </div>
+            <table class="pl-attempts">
+              <thead>
+                <tr>
+                  <th style="width: 96px">尝试</th>
+                  <th style="width: 132px">时间</th>
+                  <th style="width: 80px">结果</th>
+                  <th>失败原因</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(log, index) in item.attempts_log"
+                  :key="`${item.id}-${log.attempt_no}-${index}`"
+                >
+                  <td>{{ attemptNoText(log.attempt_no) }}</td>
+                  <td class="num">{{ mmddhhmm(log.attempted_at) }}</td>
+                  <td>
+                    <StateBadge
+                      :tone="log.success ? 'ok' : 'crit'"
+                      :label="log.success ? '成功' : '失败'"
+                    />
+                  </td>
+                  <td class="pl-attempt-error">
+                    {{ log.error || (log.success ? '该次补采成功，数据已回补' : '未返回错误信息') }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="pl-detail-foot">
+              <span
+                >重试间隔 {{ packetLossData.retry_delay_minutes }} 分钟 · 上限
+                {{ item.max_attempts }} 次</span
+              >
+              <span v-if="item.recovered_at">补回时间 {{ mmddhhmm(item.recovered_at) }}</span>
+              <span v-else-if="item.next_attempt_at"
+                >下次补采 {{ mmddhhmm(item.next_attempt_at) }}</span
+              >
+              <span v-else>补采已停止</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="!packetLossData.items.length" class="pl-empty">
+          {{ lossStatus === 'all' ? '暂无丢包补采记录' : '当前筛选条件下没有补采记录' }}
         </div>
       </div>
+
+      <PagerBar
+        :total="packetLossData.total"
+        :page="lossPage"
+        :page-size="lossPageSize"
+        :page-sizes="[5, 10, 20, 50]"
+        unit="条补采记录"
+        @update:page="changeLossPage"
+        @update:page-size="changeLossPageSize"
+      />
     </div>
 
     <div class="alarm-filter-bar">
@@ -445,10 +701,16 @@ onBeforeUnmount(() => {
           </tbody>
         </table>
       </div>
-      <div v-if="!loading && (data?.total || 0) > pageSize" class="pager">
-        <span>共 {{ data?.total }} 条 · 第 {{ page }} / {{ totalPages }} 页</span>
-        <button :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
-        <button :disabled="page >= totalPages" @click="changePage(page + 1)">下一页</button>
+      <div v-if="!loading && data" class="alarm-pager">
+        <PagerBar
+          :total="data.total || 0"
+          :page="page"
+          :page-size="pageSize"
+          :page-sizes="[20, 50, 100]"
+          unit="条告警"
+          @update:page="changePage"
+          @update:page-size="changePageSize"
+        />
       </div>
     </div>
 
@@ -491,43 +753,210 @@ onBeforeUnmount(() => {
 .packet-loss-card {
   margin-bottom: 16px;
 }
-.packet-loss-list {
-  border-top: 1px solid var(--line-soft);
-}
-.packet-loss-row {
+.pl-toolbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  padding: 11px 20px;
+  flex-wrap: wrap;
+  padding: 14px 20px 0;
+}
+.pl-chips {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.pl-search {
+  width: 280px;
+  margin-left: auto;
+  padding: 6px 11px;
+}
+.pl-scroll {
+  margin-top: 12px;
   border-top: 1px solid var(--line-soft);
+  overflow-x: auto;
 }
-.packet-loss-row:first-child {
-  border-top: none;
+.pl-head-row,
+.pl-row {
+  display: grid;
+  grid-template-columns: 88px minmax(140px, 1.1fr) 92px 108px minmax(180px, 1.8fr) 88px 18px;
+  gap: 12px;
+  align-items: center;
+  min-width: 800px;
+  padding: 0 20px;
 }
-.packet-loss-main {
-  flex: 1;
+.pl-head-row {
+  height: 34px;
+  background: rgba(17, 27, 48, 0.5);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--faint);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+.pl-item {
+  border-bottom: 1px solid var(--line-soft);
+}
+.pl-row {
+  min-height: 47px;
+  cursor: pointer;
+  transition: background 0.16s;
+}
+.pl-row:hover {
+  background: rgba(45, 212, 238, 0.04);
+}
+.pl-row:focus-visible {
+  outline: 1px solid rgba(45, 212, 238, 0.5);
+  outline-offset: -2px;
+}
+.pl-item.open .pl-row {
+  background: rgba(45, 212, 238, 0.05);
+}
+.pl-point {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  line-height: 1.35;
 }
-.packet-loss-main b {
+.pl-point b {
   font-size: 12.5px;
+  font-weight: 600;
 }
-.packet-loss-main p {
-  margin-top: 3px;
+.pl-point span {
+  color: var(--faint);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pl-cell {
   color: var(--muted);
   font-size: 11.5px;
-  line-height: 1.5;
+  white-space: nowrap;
+}
+.pl-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pl-bar {
+  flex: 1;
+  min-width: 40px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(148, 163, 204, 0.16);
+  overflow: hidden;
+}
+.pl-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--amber);
+  transition: width 0.3s var(--ease);
+}
+.pl-bar i.failed {
+  background: var(--red);
+}
+.pl-bar i.recovered {
+  background: var(--green);
+}
+.pl-progress .num {
+  color: var(--faint);
+  font-size: 11px;
+}
+.pl-reason {
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pl-chev {
+  display: inline-flex;
+  color: var(--faint);
+  transition: transform 0.18s var(--ease);
+}
+.pl-chev.open {
+  transform: rotate(90deg);
+  color: var(--cyan);
+}
+.pl-detail {
+  padding: 2px 20px 16px 120px;
+  background: rgba(6, 10, 19, 0.35);
+}
+.pl-detail-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  font-size: 12px;
+}
+.pl-detail-head b {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.pl-detail-head span {
+  color: var(--faint);
+  font-size: 11.5px;
+}
+.pl-attempts {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--line-soft);
+  background: rgba(17, 27, 48, 0.5);
+}
+.pl-attempts th {
+  padding: 7px 10px;
+  background: rgba(22, 34, 60, 0.6);
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+}
+.pl-attempts td {
+  padding: 7px 10px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 12px;
+  vertical-align: top;
+}
+.pl-attempts tbody tr:first-child td {
+  border-top: none;
+}
+.pl-attempts .num {
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.pl-attempt-error {
+  color: var(--muted);
+  line-height: 1.55;
   word-break: break-word;
 }
-.packet-loss-time {
-  margin-left: 10px;
+.pl-detail-foot {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
   color: var(--faint);
   font-size: 11px;
-  white-space: nowrap;
 }
-.packet-loss-attempts {
-  flex: none;
+.pl-empty {
+  padding: 26px;
   color: var(--faint);
-  font-size: 11px;
-  white-space: nowrap;
+  font-size: 12px;
+  text-align: center;
+}
+.alarm-pager {
+  padding: 0 20px 14px;
+}
+@media (max-width: 720px) {
+  .pl-search {
+    width: 100%;
+    margin-left: 0;
+  }
+  .pl-detail {
+    padding-left: 20px;
+  }
 }
 </style>
