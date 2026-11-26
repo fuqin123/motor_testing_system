@@ -915,6 +915,25 @@ def test_packet_loss_records_and_api(client, db):
     item = next(entry for entry in payload["items"] if entry["sensor_code"] == sensor.code)
     assert item["error"] == "Modbus timeout after 3s"
     assert item["max_attempts"] == 3
+    assert payload["page"] == 1
+    assert payload["page_size"] == 20
+    assert payload["total"] >= 1
+    assert item["attempts_log"][0]["attempt_no"] == 0
+    assert item["attempts_log"][0]["success"] is False
+    assert item["attempts_log"][0]["error"] == "Modbus timeout after 3s"
+
+    from app.services.collector import _apply_packet_retry_result
+
+    _apply_packet_retry_result([row], result, now + timedelta(minutes=1), db=db)
+    db.commit()
+    payload = client.get("/api/v1/alarms/packet-losses?status=pending&page=1&page_size=1").json()
+    item = next(entry for entry in payload["items"] if entry["sensor_code"] == sensor.code)
+    assert payload["page_size"] == 1
+    assert item["attempts"] == 1
+    assert [entry["attempt_no"] for entry in item["attempts_log"]] == [0, 1]
+    assert item["attempts_log"][1]["success"] is False
+    assert item["attempts_log"][1]["error"] == "Modbus timeout after 3s"
+    assert client.get("/api/v1/alarms/packet-losses?status=recovered").json()["total"] == 0
 
 
 def test_packet_retry_stops_after_max_attempts():

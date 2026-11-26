@@ -186,6 +186,22 @@ class PacketLoss(TimestampMixin, Base):
     recovered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class PacketLossAttempt(Base):
+    """每次补采尝试的明细，用于回溯失败原因。attempt_no=0 表示初次采集失败。"""
+
+    __tablename__ = "packet_loss_attempts"
+    __table_args__ = (Index("ix_packet_loss_attempts_loss_time", "packet_loss_id", "attempted_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    packet_loss_id: Mapped[int] = mapped_column(
+        ForeignKey("packet_losses.id", ondelete="CASCADE"), index=True
+    )
+    attempt_no: Mapped[int] = mapped_column(Integer, default=0)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    success: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class AlarmStreak(TimestampMixin, Base):
     __tablename__ = "alarm_streaks"
     __table_args__ = (UniqueConstraint("motor_id", "rule_key", name="uq_alarm_streak_motor_rule"),)

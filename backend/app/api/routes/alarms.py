@@ -17,7 +17,7 @@ from app.api.serializers import (
 from app.core.config import settings
 from app.core.security import UserContext
 from app.core.time import as_utc, iso, local_day_bounds_utc, utcnow
-from app.db.models import Alarm, PacketLoss
+from app.db.models import Alarm, PacketLoss, PacketLossAttempt
 from app.schemas import BulkCloseRequest, CloseAlarmRequest
 
 router = APIRouter(tags=["告警"])
@@ -183,23 +183,42 @@ def export_alarms(
 
 @router.get("/alarms/packet-losses")
 def list_packet_losses(
-    limit: int = Query(default=50, ge=1, le=200),
+    status: str = Query(default="all"),
+    q: str = Query(default=""),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     user: UserContext = Depends(get_current_user),
 ) -> dict:
+    query = select(PacketLoss)
+    if status in ("pending", "failed", "recovered"):
+        query = query.where(PacketLoss.status == status)
+    term = q.strip()
+    if term:
+        pattern = f"%{term}%"
+        query = query.where(
+            or_(
+                PacketLoss.gateway_code.ilike(pattern),
+                PacketLoss.sensor_code.ilike(pattern),
+                PacketLoss.motor_code.ilike(pattern),
+                PacketLoss.error.ilike(pattern),
+            )
+        )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = list(
         db.scalars(
-            select(PacketLoss).order_by(PacketLoss.created_at.desc()).limit(limit)
+            query.order_by(PacketLoss.created_at.desc(), PacketLoss.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
         ).all()
     )
+    attempts_map = _packet_attempts(db, [row.id for row in rows])
     stats = {
         "pending": db.scalar(
             select(func.count(PacketLoss.id)).where(PacketLoss.status == "pending")
         )
         or 0,
-        "failed": db.scalar(
-            select(func.count(PacketLoss.id)).where(PacketLoss.status == "failed")
-        )
+        "failed": db.scalar(select(func.count(PacketLoss.id)).where(PacketLoss.status == "failed"))
         or 0,
         "recovered": db.scalar(
             select(func.count(PacketLoss.id)).where(PacketLoss.status == "recovered")
@@ -207,25 +226,73 @@ def list_packet_losses(
         or 0,
     }
     return {
-        "items": [
-            {
-                "id": row.id,
-                "cycle_ts": iso(row.cycle_ts),
-                "gateway_code": row.gateway_code,
-                "sensor_code": row.sensor_code,
-                "motor_code": row.motor_code,
-                "attempts": row.attempts,
-                "max_attempts": row.max_attempts,
-                "status": row.status,
-                "error": row.error,
-                "next_attempt_at": iso(row.next_attempt_at),
-                "last_attempt_at": iso(row.last_attempt_at),
-                "recovered_at": iso(row.recovered_at),
-            }
-            for row in rows
-        ],
+        "items": [_packet_loss_dict(row, attempts_map.get(row.id, [])) for row in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
         "stats": stats,
         "retry_delay_minutes": settings.packet_retry_delay_minutes,
+    }
+
+
+def _packet_attempts(db: Session, loss_ids: list[int]) -> dict[int, list[PacketLossAttempt]]:
+    if not loss_ids:
+        return {}
+    rows = db.scalars(
+        select(PacketLossAttempt)
+        .where(PacketLossAttempt.packet_loss_id.in_(loss_ids))
+        .order_by(PacketLossAttempt.attempt_no, PacketLossAttempt.id)
+    ).all()
+    grouped: dict[int, list[PacketLossAttempt]] = {}
+    for row in rows:
+        grouped.setdefault(row.packet_loss_id, []).append(row)
+    return grouped
+
+
+def _packet_loss_dict(row: PacketLoss, attempts: list[PacketLossAttempt]) -> dict:
+    log = [
+        {
+            "attempt_no": item.attempt_no,
+            "attempted_at": iso(item.attempted_at),
+            "success": bool(item.success),
+            "error": item.error,
+        }
+        for item in attempts
+    ]
+    if not log:
+        # 兼容迁移前的历史记录：用当前错误信息回填一条明细。
+        if row.status == "recovered":
+            log = [
+                {
+                    "attempt_no": row.attempts,
+                    "attempted_at": iso(row.recovered_at or row.last_attempt_at or row.cycle_ts),
+                    "success": True,
+                    "error": None,
+                }
+            ]
+        else:
+            log = [
+                {
+                    "attempt_no": row.attempts,
+                    "attempted_at": iso(row.last_attempt_at or row.cycle_ts),
+                    "success": False,
+                    "error": row.error,
+                }
+            ]
+    return {
+        "id": row.id,
+        "cycle_ts": iso(row.cycle_ts),
+        "gateway_code": row.gateway_code,
+        "sensor_code": row.sensor_code,
+        "motor_code": row.motor_code,
+        "attempts": row.attempts,
+        "max_attempts": row.max_attempts,
+        "status": row.status,
+        "error": row.error,
+        "next_attempt_at": iso(row.next_attempt_at),
+        "last_attempt_at": iso(row.last_attempt_at),
+        "recovered_at": iso(row.recovered_at),
+        "attempts_log": log,
     }
 
 

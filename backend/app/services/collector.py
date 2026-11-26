@@ -9,7 +9,16 @@ from sqlalchemy import delete, func, select
 
 from app.core.config import settings
 from app.core.time import as_utc, floor_bucket, iso, next_poll_time, utcnow
-from app.db.models import AlarmStreak, Gateway, Motor, PacketLoss, PollCycle, Reading, Sensor
+from app.db.models import (
+    AlarmStreak,
+    Gateway,
+    Motor,
+    PacketLoss,
+    PacketLossAttempt,
+    PollCycle,
+    Reading,
+    Sensor,
+)
 from app.db.session import SessionLocal
 from app.services.alarms import (
     CONFIRM_RULE_KEYS,
@@ -157,6 +166,27 @@ def _packet_key(ts: datetime, gateway_id: int, sensor_id: int | None) -> str:
     return f"{ts.isoformat()}:{gateway_id}:{sensor_id or 0}"
 
 
+def _log_packet_attempt(
+    db,
+    row: PacketLoss,
+    *,
+    attempt_no: int,
+    success: bool,
+    error: str | None,
+    at: datetime,
+) -> None:
+    """写入一次采集/补采尝试明细，便于前端逐次查看失败原因。"""
+    db.add(
+        PacketLossAttempt(
+            packet_loss_id=row.id,
+            attempt_no=attempt_no,
+            attempted_at=at,
+            success=success,
+            error=None if success else (error or "未知采集错误")[:2000],
+        )
+    )
+
+
 def _upsert_packet_loss(
     db,
     *,
@@ -173,7 +203,8 @@ def _upsert_packet_loss(
 ) -> PacketLoss:
     key = _packet_key(ts, gateway_id, sensor_id)
     row = db.scalar(select(PacketLoss).where(PacketLoss.key == key))
-    if row is None:
+    created = row is None
+    if created:
         row = PacketLoss(
             key=key,
             cycle_ts=ts,
@@ -196,6 +227,9 @@ def _upsert_packet_loss(
     else:
         row.status = "pending"
         row.next_attempt_at = now + timedelta(minutes=settings.packet_retry_delay_minutes)
+    if created:
+        db.flush()
+        _log_packet_attempt(db, row, attempt_no=0, success=False, error=row.error, at=now)
     return row
 
 
@@ -205,9 +239,11 @@ def _mark_packet_recovered(
     key = _packet_key(ts, gateway_id, sensor_id)
     row = db.scalar(select(PacketLoss).where(PacketLoss.key == key))
     if row is not None and row.status != "recovered":
+        row.attempts += 1
         row.status = "recovered"
         row.recovered_at = now
         row.next_attempt_at = None
+        _log_packet_attempt(db, row, attempt_no=row.attempts, success=True, error=None, at=now)
 
 
 def _record_packet_losses(
@@ -499,7 +535,9 @@ def run_poll_cycle(
     return summary
 
 
-def _apply_packet_retry_result(rows: list[PacketLoss], result: GatewayReadResult, now: datetime) -> None:
+def _apply_packet_retry_result(
+    rows: list[PacketLoss], result: GatewayReadResult, now: datetime, db=None
+) -> None:
     for row in rows:
         row.attempts += 1
         row.last_attempt_at = now
@@ -510,6 +548,10 @@ def _apply_packet_retry_result(rows: list[PacketLoss], result: GatewayReadResult
             sensor_result = result.sensor_results.get(row.sensor_code or "")
             success = bool(sensor_result and sensor_result.success)
             error = sensor_result.error if sensor_result else "未返回读取结果"
+        if db is not None:
+            _log_packet_attempt(
+                db, row, attempt_no=row.attempts, success=success, error=error, at=now
+            )
         if success:
             row.status = "recovered"
             row.recovered_at = now
@@ -556,6 +598,14 @@ def retry_due_packet_losses() -> int:
                     row.status = "failed"
                     row.error = "网关或采集点已停用，无法补采"
                     row.next_attempt_at = None
+                    _log_packet_attempt(
+                        db,
+                        row,
+                        attempt_no=row.attempts,
+                        success=False,
+                        error=row.error,
+                        at=attempted,
+                    )
                 db.commit()
                 continue
         try:
@@ -577,6 +627,14 @@ def retry_due_packet_losses() -> int:
                         row.next_attempt_at = attempted + timedelta(
                             minutes=settings.packet_retry_delay_minutes
                         )
+                    _log_packet_attempt(
+                        db,
+                        row,
+                        attempt_no=row.attempts,
+                        success=False,
+                        error=row.error,
+                        at=attempted,
+                    )
                 db.commit()
             continue
         with SessionLocal() as db:
@@ -584,6 +642,7 @@ def retry_due_packet_losses() -> int:
                 list(db.scalars(select(PacketLoss).where(PacketLoss.id.in_(ids))).all()),
                 result,
                 utcnow(),
+                db=db,
             )
             db.commit()
     return len(groups)
@@ -614,8 +673,19 @@ def cleanup_old_data() -> None:
     with SessionLocal() as db:
         readings = db.execute(delete(Reading).where(Reading.ts < cutoff)).rowcount
         cycles = db.execute(delete(PollCycle).where(PollCycle.started_at < poll_cutoff)).rowcount
+        old_loss_ids = select(PacketLoss.id).where(PacketLoss.cycle_ts < cutoff)
+        attempts = db.execute(
+            delete(PacketLossAttempt).where(PacketLossAttempt.packet_loss_id.in_(old_loss_ids))
+        ).rowcount
+        losses = db.execute(delete(PacketLoss).where(PacketLoss.cycle_ts < cutoff)).rowcount
         db.commit()
-    logger.info("历史数据清理完成 readings=%s poll_cycles=%s", readings, cycles)
+    logger.info(
+        "历史数据清理完成 readings=%s poll_cycles=%s packet_losses=%s packet_attempts=%s",
+        readings,
+        cycles,
+        losses,
+        attempts,
+    )
 
 
 class CollectorService(threading.Thread):
@@ -657,7 +727,9 @@ class CollectorService(threading.Thread):
 
     def _run_once(self, recheck: bool = False) -> None:
         started = utcnow()
-        self._update(running=True, last_started_at=iso(started), last_error=None, rechecking=recheck)
+        self._update(
+            running=True, last_started_at=iso(started), last_error=None, rechecking=recheck
+        )
         try:
             summary = run_poll_cycle(
                 bucket_minutes=settings.alarm_recheck_interval_minutes if recheck else None,
@@ -675,9 +747,7 @@ class CollectorService(threading.Thread):
 
     def _refresh_recheck(self) -> None:
         self._next_recheck_at = pending_recheck_at()
-        self._update(
-            next_recheck_at=iso(self._next_recheck_at) if self._next_recheck_at else None
-        )
+        self._update(next_recheck_at=iso(self._next_recheck_at) if self._next_recheck_at else None)
 
     def run(self) -> None:
         self._update(thread_alive=True)
@@ -687,9 +757,7 @@ class CollectorService(threading.Thread):
             self._refresh_recheck()
             while not self._stop_event.is_set():
                 normal_next = next_poll_time(utcnow(), settings.poll_interval_minutes)
-                recheck = bool(
-                    self._next_recheck_at and self._next_recheck_at < normal_next
-                )
+                recheck = bool(self._next_recheck_at and self._next_recheck_at < normal_next)
                 next_run = self._next_recheck_at if recheck else normal_next
                 self._update(next_run_at=iso(next_run))
                 rescheduled = False
