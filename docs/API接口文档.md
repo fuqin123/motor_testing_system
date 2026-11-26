@@ -1,6 +1,6 @@
 # API 接口文档
 
-> 版本：v0.7.3 · 2026-11-20
+> 版本：v0.7.4 · 2026-11-26
 > Base URL：`http://<host>:8000/api/v1`
 > 在线文档：`/api/docs`（Swagger UI）· `/api/redoc` · `/api/openapi.json`
 
@@ -44,7 +44,9 @@
 
 ### 1.3 分页
 
-告警列表：`page` 从 1 开始，`page_size` 默认 50、最大 200；返回 `total/page/page_size`。
+- 告警列表：`page` 从 1 开始，`page_size` 默认 50、最大 200。
+- 丢包补采列表：`page` 从 1 开始，`page_size` 默认 20、最大 100。
+- 两者均返回 `total/page/page_size`；`total` 为当前筛选条件下的总条数。
 
 ### 1.4 标识
 
@@ -633,33 +635,51 @@
 
 ### 6.2 丢包补采记录
 
-`GET /alarms/packet-losses?limit=50`
+`GET /alarms/packet-losses?status=all&q=&page=1&page_size=20`
+
+| 参数 | 类型 | 默认 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `status` | string | `all` | `all` 全部 / `pending` 待补采 / `failed` 补采失败 / `recovered` 已补回 |
+| `q` | string | `""` | 模糊匹配网关、采集点、电机编码与错误信息 |
+| `page` | int | `1` | 页号，从 1 开始 |
+| `page_size` | int | `20` | 每页条数，最大 100 |
 
 ```json
 {
   "items": [
     {
       "id": 12,
-      "cycle_ts": "2026-11-20T02:15:00Z",
+      "cycle_ts": "2026-11-26T02:15:00Z",
       "gateway_code": "GW-01",
       "sensor_code": "T-01",
       "motor_code": "M-01",
-      "attempts": 1,
+      "attempts": 2,
       "max_attempts": 3,
-      "status": "pending",
-      "error": "Modbus timeout after 3s",
-      "next_attempt_at": "2026-11-20T02:17:00Z",
-      "last_attempt_at": "2026-11-20T02:16:00Z",
-      "recovered_at": null
+      "status": "recovered",
+      "error": "CRC error",
+      "next_attempt_at": null,
+      "last_attempt_at": "2026-11-26T02:17:00Z",
+      "recovered_at": "2026-11-26T02:17:00Z",
+      "attempts_log": [
+        { "attempt_no": 0, "attempted_at": "2026-11-26T02:15:00Z", "success": false, "error": "Modbus timeout after 3s" },
+        { "attempt_no": 1, "attempted_at": "2026-11-26T02:16:00Z", "success": false, "error": "CRC error" },
+        { "attempt_no": 2, "attempted_at": "2026-11-26T02:17:00Z", "success": true, "error": null }
+      ]
     }
   ],
-  "stats": { "pending": 1, "failed": 0, "recovered": 4 },
+  "total": 34,
+  "page": 1,
+  "page_size": 20,
+  "stats": { "pending": 9, "failed": 9, "recovered": 16 },
   "retry_delay_minutes": 1
 }
 ```
 
-- 采集失败后写入记录；后台按 1 分钟延迟补采，成功后状态为 `recovered`，达到最大次数为 `failed`。
+- 采集失败后写入记录；后台按 1 分钟延迟补采，成功后状态为 `recovered`，达到最大次数或网关停用为 `failed`。
 - `error` 为最近一次真实采集错误，便于现场验证；`attempts/max_attempts` 表示已补采次数和上限。
+- `attempts_log[]` 为逐次尝试明细：`attempt_no=0` 表示初次采集失败，`≥1` 为第 N 次补采；成功记录 `success=true`、`error=null`。
+- 迁移前的历史记录没有明细，接口按现有错误信息回填一条，不会返回空数组。
+- `total` 为当前筛选条件下的条数；`stats` 为全量统计，不随 `status/q` 变化，用于筛选器计数。
 - 网关连接失败时 `sensor_code`/`motor_code` 可能为 `null`。
 
 ### 6.3 告警详情

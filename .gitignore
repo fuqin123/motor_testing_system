@@ -40,3 +40,4 @@ backend/data/
 
 # ---- local tooling artifacts ----
 .qoder-credits/
+.workbuddy/
